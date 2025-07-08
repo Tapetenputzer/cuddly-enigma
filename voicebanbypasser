@@ -541,7 +541,7 @@ end
 -- Info Tab
 Tabs.Info:AddSection("Info"):AddParagraph({
     Title="Info",
-    Content="★ Made by Tapetenputzer ★\nDiscord: tapetenputzer\nhttps://discord.gg/2xDHnGg6J"
+    Content="★ Made by massivendurchfall ★\nDiscord: massivendurchfall\nhttps://discord.gg/2xDHnGg6J"
 })
 
 -- Settings Tab
