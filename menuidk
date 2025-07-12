@@ -86,6 +86,7 @@ local function doBang(player)
             end
             local targetHRP = player.Character.HumanoidRootPart
             local myHRP     = localPlayer.Character.HumanoidRootPart
+            -- Positioniere den LocalPlayer hinter dem Target
             local offset    = math.sin((tick() - startTime) * 30) * 2
             local behindPos = targetHRP.Position - targetHRP.CFrame.LookVector * 3
             myHRP.CFrame    = CFrame.new(behindPos + targetHRP.CFrame.LookVector * offset, targetHRP.Position)
@@ -114,9 +115,13 @@ local function doBangV2(player)
             end
             local pos   = targetHRP.Position
             local look  = targetHRP.CFrame.LookVector
-            local base  = pos - look * 0.5
-            local offset = math.sin((tick() - startTime) * 50) * 0.2
-            myHRP.CFrame = CFrame.new(base + look * offset, pos)
+            local frontPos = pos + look * 2  
+            local offset = math.sin((tick() - startTime) * 25) * 1.5 
+            local finalPos = frontPos - look * offset
+            local heightOffset = 2,3  -- Anpassung der Höhe (etwa Schritthöhe)
+            finalPos = finalPos + Vector3.new(0, heightOffset, 0)
+            
+            myHRP.CFrame = CFrame.new(finalPos, pos + Vector3.new(0, heightOffset, 0))  -- Schaue zum Target (auch leicht nach oben)
         end)
     end
 end
@@ -181,7 +186,8 @@ local function doStepOnMe(player)
 
         local targetHRP = player.Character.HumanoidRootPart
         local myHRP     = localPlayer.Character.HumanoidRootPart
-        local offsetY   = localPlayer.Character:FindFirstChild("UpperTorso") and 3 or 6
+        local baseOffsetY = localPlayer.Character:FindFirstChild("UpperTorso") and 3 or 6
+        local startTime = tick()
 
         stepOnMeConnection = RunService.Heartbeat:Connect(function()
             if not (targetHRP and myHRP) then
@@ -189,7 +195,22 @@ local function doStepOnMe(player)
                 stepOnMeConnection = nil
                 return
             end
-            local newPos = targetHRP.Position - Vector3.new(0, offsetY, 0)
+            
+            -- Bewegung von Füßen bis Torso des Targets
+            local feetOffset = 4  -- Position bei den Füßen des Targets
+            local torsoOffset = 0.5  -- Position beim Torso des Targets
+            
+            -- Hoch- und Runterbewegung zwischen Füßen und Torso
+            local movementRange = (feetOffset - torsoOffset) / 2  -- Hälfte der Bewegungsreichweite
+            local centerOffset = (feetOffset + torsoOffset) / 2   -- Mittelpunkt der Bewegung
+            
+            local verticalMovement = math.sin((tick() - startTime) * 8) * movementRange
+            local finalOffsetY = centerOffset + verticalMovement
+            
+            -- Position unter dem Target mit vertikaler Bewegung
+            local newPos = targetHRP.Position - Vector3.new(0, finalOffsetY, 0)
+            
+            -- LocalPlayer horizontal ausrichten und um 90 Grad rotieren (liegt auf dem Rücken)
             myHRP.CFrame = CFrame.new(newPos) * CFrame.Angles(math.rad(90), 0, 0)
         end)
     end
