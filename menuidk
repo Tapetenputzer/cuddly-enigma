@@ -73,6 +73,7 @@ local function doBang(player)
         bangConnection = nil
         if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
             localPlayer.Character.HumanoidRootPart.Velocity = Vector3.new()
+            localPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new()
         end
     elseif player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         and localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -86,10 +87,16 @@ local function doBang(player)
             end
             local targetHRP = player.Character.HumanoidRootPart
             local myHRP     = localPlayer.Character.HumanoidRootPart
-            -- Positioniere den LocalPlayer hinter dem Target
-            local offset    = math.sin((tick() - startTime) * 30) * 2
-            local behindPos = targetHRP.Position - targetHRP.CFrame.LookVector * 3
-            myHRP.CFrame    = CFrame.new(behindPos + targetHRP.CFrame.LookVector * offset, targetHRP.Position)
+            
+            -- Direkte CFrame-Manipulation ohne Velocity für bessere Synchronisation
+            local offset    = math.sin((tick() - startTime) * 35) * 1.8  -- Höhere Frequenz
+            local behindPos = targetHRP.Position - targetHRP.CFrame.LookVector * 2.5
+            local finalPos = behindPos + targetHRP.CFrame.LookVector * offset
+            
+            -- Direkte Positionierung ohne Velocity
+            myHRP.CFrame = CFrame.new(finalPos, targetHRP.Position)
+            myHRP.Velocity = Vector3.new()
+            myHRP.AssemblyLinearVelocity = Vector3.new()
         end)
     end
 end
@@ -100,28 +107,37 @@ local function doBangV2(player)
         bangV2Connection = nil
         if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
             localPlayer.Character.HumanoidRootPart.Velocity = Vector3.new()
+            localPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new()
         end
     elseif player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         and localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
 
-        local targetHRP = player.Character.HumanoidRootPart
-        local myHRP     = localPlayer.Character.HumanoidRootPart
         local startTime = tick()
         bangV2Connection = RunService.Heartbeat:Connect(function()
-            if not (player.Character and targetHRP) then
+            if not (player.Character and player.Character:FindFirstChild("HumanoidRootPart")) then
                 bangV2Connection:Disconnect()
                 bangV2Connection = nil
                 return
             end
+            local targetHRP = player.Character.HumanoidRootPart
+            local myHRP     = localPlayer.Character.HumanoidRootPart
+            
             local pos   = targetHRP.Position
             local look  = targetHRP.CFrame.LookVector
-            local frontPos = pos + look * 2  
-            local offset = math.sin((tick() - startTime) * 25) * 1.5 
+            local frontPos = pos + look * 2.3  -- Etwas näher zum Target
+            
+            -- Höhere Frequenz für bessere Synchronisation
+            local offset = math.sin((tick() - startTime) * 30) * 1.3
             local finalPos = frontPos - look * offset
-            local heightOffset = 2,3  -- Anpassung der Höhe (etwa Schritthöhe)
+            
+            -- Höhe anpassen
+            local heightOffset = 1.5
             finalPos = finalPos + Vector3.new(0, heightOffset, 0)
             
-            myHRP.CFrame = CFrame.new(finalPos, pos + Vector3.new(0, heightOffset, 0))  -- Schaue zum Target (auch leicht nach oben)
+            -- Direkte Positionierung ohne Velocity
+            myHRP.CFrame = CFrame.new(finalPos, pos + Vector3.new(0, heightOffset, 0))
+            myHRP.Velocity = Vector3.new()
+            myHRP.AssemblyLinearVelocity = Vector3.new()
         end)
     end
 end
@@ -132,14 +148,24 @@ local function doHeadsit(player)
         headsitConnection = nil
         if localPlayer.Character then
             local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Velocity = Vector3.new() end
+            if hrp then 
+                hrp.Velocity = Vector3.new()
+                hrp.AssemblyLinearVelocity = Vector3.new()
+            end
             local hum = localPlayer.Character:FindFirstChild("Humanoid")
             if hum then hum.Sit = false end
         end
     elseif player and player.Character and player.Character:FindFirstChild("Head")
         and localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
 
-        localPlayer.Character.Humanoid.Sit = true
+        -- Verbesserte Headsit-Logik
+        local humanoid = localPlayer.Character.Humanoid
+        local myHRP = localPlayer.Character.HumanoidRootPart
+        
+        -- Stelle sicher, dass der Spieler sitzt
+        humanoid.Sit = true
+        wait(0.1)  -- Kurze Pause damit Sit richtig angewendet wird
+        
         local head = player.Character.Head
         headsitConnection = RunService.Heartbeat:Connect(function()
             if not (player.Character and player.Character:FindFirstChild("Head")) then
@@ -147,8 +173,23 @@ local function doHeadsit(player)
                 headsitConnection = nil
                 return
             end
-            local newCF = head.CFrame * CFrame.new(0, head.Size.Y / 2, 0)
-            localPlayer.Character.HumanoidRootPart.CFrame = newCF
+            
+            -- Verbesserte Positionierung auf dem Kopf
+            local headCFrame = head.CFrame
+            local headSize = head.Size
+            local sitOffset = Vector3.new(0, headSize.Y/2 + 1, 0)  -- Etwas höher für besseren Sitz
+            
+            local newCF = headCFrame + sitOffset
+            
+            -- Stelle sicher, dass der Spieler weiterhin sitzt
+            if not humanoid.Sit then
+                humanoid.Sit = true
+            end
+            
+            -- Direkte Positionierung ohne Velocity
+            myHRP.CFrame = newCF
+            myHRP.Velocity = Vector3.new()
+            myHRP.AssemblyLinearVelocity = Vector3.new()
         end)
     end
 end
@@ -180,13 +221,13 @@ local function doStepOnMe(player)
         stepOnMeConnection = nil
         if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
             localPlayer.Character.HumanoidRootPart.Velocity = Vector3.new()
+            localPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new()
         end
     elseif player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         and localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
 
         local targetHRP = player.Character.HumanoidRootPart
         local myHRP     = localPlayer.Character.HumanoidRootPart
-        local baseOffsetY = localPlayer.Character:FindFirstChild("UpperTorso") and 3 or 6
         local startTime = tick()
 
         stepOnMeConnection = RunService.Heartbeat:Connect(function()
@@ -197,25 +238,25 @@ local function doStepOnMe(player)
             end
             
             -- Bewegung von Füßen bis Torso des Targets
-            local feetOffset = 4  -- Position bei den Füßen des Targets
-            local torsoOffset = 0.5  -- Position beim Torso des Targets
+            local feetOffset = 4
+            local torsoOffset = 0.5
             
-            -- Hoch- und Runterbewegung zwischen Füßen und Torso
-            local movementRange = (feetOffset - torsoOffset) / 2  -- Hälfte der Bewegungsreichweite
-            local centerOffset = (feetOffset + torsoOffset) / 2   -- Mittelpunkt der Bewegung
+            -- Höhere Frequenz für bessere Synchronisation
+            local movementRange = (feetOffset - torsoOffset) / 2
+            local centerOffset = (feetOffset + torsoOffset) / 2
             
-            local verticalMovement = math.sin((tick() - startTime) * 8) * movementRange
+            local verticalMovement = math.sin((tick() - startTime) * 12) * movementRange  -- Höhere Frequenz
             local finalOffsetY = centerOffset + verticalMovement
             
-            -- Position unter dem Target mit vertikaler Bewegung
             local newPos = targetHRP.Position - Vector3.new(0, finalOffsetY, 0)
             
-            -- LocalPlayer horizontal ausrichten und um 90 Grad rotieren (liegt auf dem Rücken)
+            -- Direkte Positionierung ohne Velocity
             myHRP.CFrame = CFrame.new(newPos) * CFrame.Angles(math.rad(90), 0, 0)
+            myHRP.Velocity = Vector3.new()
+            myHRP.AssemblyLinearVelocity = Vector3.new()
         end)
     end
 end
-
 --------------------------------------------------------------------------------
 -- GUI SETUP
 --------------------------------------------------------------------------------
