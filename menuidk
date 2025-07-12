@@ -131,7 +131,7 @@ local function doBangV2(player)
             local finalPos = frontPos - look * offset
             
             -- Höhe anpassen
-            local heightOffset = 1.5
+            local heightOffset = 2
             finalPos = finalPos + Vector3.new(0, heightOffset, 0)
             
             -- Direkte Positionierung ohne Velocity
