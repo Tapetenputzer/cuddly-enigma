@@ -1,427 +1,4 @@
--- Roblox Ink Game GUI Script - Optimiert für Performance
--- Für Executor verwendung - Alle Lag-Probleme behoben
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
-
--- Variablen für Funktionen
-local noclipEnabled = false
-local infJumpEnabled = false
-local originalJumpPower = humanoid.JumpPower
-local noclipConnection = nil
-local infJumpConnection = nil
-local isMinimized = false
-local originalSize = UDim2.new(0, 300, 0, 400)
-local minimizedSize = UDim2.new(0, 300, 0, 50)
-
--- Game spezifische Variablen
-local tugOfWarEnabled = false
-local tugOfWarConnection = nil
-local glassVisionEnabled = false
-local glassVisionConnection = nil
-
--- Performance Optimierung für alle Funktionen
-local tugOfWarLastCheck = 0
-local tugOfWarCheckInterval = 0.1
-local glassVisionLastCheck = 0
-local glassVisionCheckInterval = 2.0 -- Nur alle 2 Sekunden prüfen
-local glassObjects = {} -- Cache für Glass Objekte
-local glassEffects = {} -- Cache für Effekte
-
--- RedLight GreenLight Koordinaten
-local redLightCoordinates = {
-    Vector3.new(-49.88, 1023.10, 83.59),  
-}
-local currentCoordIndex = 1
-
--- GUI erstellen
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "InkGameGUI"
-screenGui.Parent = playerGui
-
--- Haupt Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = originalSize
-mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = screenGui
-
--- Abgerundete Ecken
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = mainFrame
-
--- Titel
-local titleLabel = Instance.new("TextButton")
-titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(0.85, 0, 0, 50)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-titleLabel.BorderSizePixel = 0
-titleLabel.Text = "INK GAME"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.Parent = mainFrame
-
--- Minimize Button
-local minimizeButton = Instance.new("TextButton")
-minimizeButton.Name = "MinimizeButton"
-minimizeButton.Size = UDim2.new(0.15, 0, 0, 50)
-minimizeButton.Position = UDim2.new(0.85, 0, 0, 0)
-minimizeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-minimizeButton.BorderSizePixel = 0
-minimizeButton.Text = "-"
-minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeButton.TextScaled = true
-minimizeButton.Font = Enum.Font.SourceSansBold
-minimizeButton.Parent = mainFrame
-
--- Titel Ecken
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = titleLabel
-
--- Minimize Button Ecken
-local minimizeCorner = Instance.new("UICorner")
-minimizeCorner.CornerRadius = UDim.new(0, 8)
-minimizeCorner.Parent = minimizeButton
-
--- Minimize Funktionalität
-minimizeButton.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    local targetSize = isMinimized and minimizedSize or originalSize
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(mainFrame, tweenInfo, {Size = targetSize})
-    
-    minimizeButton.Text = isMinimized and "+" or "-"
-    tween:Play()
-end)
-
--- Container für Buttons
-local buttonContainer = Instance.new("Frame")
-buttonContainer.Name = "ButtonContainer"
-buttonContainer.Size = UDim2.new(1, -20, 1, -70)
-buttonContainer.Position = UDim2.new(0, 10, 0, 60)
-buttonContainer.BackgroundTransparency = 1
-buttonContainer.Parent = mainFrame
-
--- Infinite Jump Funktionalität
-local function enableInfiniteJump()
-    if infJumpConnection then
-        infJumpConnection:Disconnect()
-    end
-    
-    infJumpConnection = UserInputService.JumpRequest:Connect(function()
-        if character and character:FindFirstChild("Humanoid") then
-            character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end)
-end
-
-local function disableInfiniteJump()
-    if infJumpConnection then
-        infJumpConnection:Disconnect()
-        infJumpConnection = nil
-    end
-end
-
--- Optimierte Tug of War Funktion
-local function enableTugOfWar()
-    if tugOfWarConnection then
-        tugOfWarConnection:Disconnect()
-    end
-    
-    tugOfWarConnection = RunService.Heartbeat:Connect(function()
-        local currentTime = tick()
-        
-        if currentTime - tugOfWarLastCheck < tugOfWarCheckInterval then
-            return
-        end
-        tugOfWarLastCheck = currentTime
-        
-        local playerGui = player:FindFirstChild("PlayerGui")
-        if not playerGui then return end
-        
-        local skillCheckGuis = {
-            playerGui:FindFirstChild("SkillCheck"),
-            playerGui:FindFirstChild("Skillcheck"),
-            playerGui:FindFirstChild("skillcheck"),
-            playerGui:FindFirstChild("SkillcheckGUI"),
-            playerGui:FindFirstChild("TugOfWar")
-        }
-        
-        for _, skillCheckGui in pairs(skillCheckGuis) do
-            if skillCheckGui then
-                local frame = skillCheckGui:FindFirstChildOfClass("Frame")
-                if frame then
-                    local pointer = frame:FindFirstChild("Pointer") or frame:FindFirstChild("pointer")
-                    local successZone = frame:FindFirstChild("SuccessZone") or 
-                                      frame:FindFirstChild("successzone") or
-                                      frame:FindFirstChild("Success") or
-                                      frame:FindFirstChild("GreenZone")
-                    
-                    if pointer and successZone then
-                        local pointerPos = pointer.AbsolutePosition
-                        local successPos = successZone.AbsolutePosition
-                        local successSize = successZone.AbsoluteSize
-                        
-                        if pointerPos.X >= successPos.X and pointerPos.X <= successPos.X + successSize.X and
-                           pointerPos.Y >= successPos.Y and pointerPos.Y <= successPos.Y + successSize.Y then
-                            
-                            game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                            task.wait(0.05)
-                            game:GetService("VirtualInputManager"):SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                            
-                            tugOfWarLastCheck = currentTime + 0.5
-                        end
-                    end
-                end
-                break
-            end
-        end
-    end)
-end
-
-local function disableTugOfWar()
-    if tugOfWarConnection then
-        tugOfWarConnection:Disconnect()
-        tugOfWarConnection = nil
-    end
-end
-
--- Optimierte Glass Vision Funktionen
-local function findGlassObjects()
-    glassObjects = {}
-    
-    -- Verwende spawn() um die Suche async zu machen
-    spawn(function()
-        local objectsToCheck = {}
-        
-        -- Sammle alle relevanten Objekte
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                local name = obj.Name:lower()
-                if name:find("glass") or obj.Material == Enum.Material.Glass or 
-                   name:find("window") or obj.Transparency > 0.3 then
-                    table.insert(objectsToCheck, obj)
-                end
-            end
-        end
-        
-        -- Verarbeite Objekte in kleinen Batches
-        for i = 1, #objectsToCheck do
-            local obj = objectsToCheck[i]
-            if obj and obj.Parent then
-                local isBreakable = false
-                
-                -- Schnelle Überprüfung für zerbrechliches Glas
-                if obj.CanCollide == false or obj.Transparency > 0.5 or
-                   obj:GetAttribute("Breakable") == true or
-                   obj.Name:lower():find("fake") or obj.Name:lower():find("break") then
-                    isBreakable = true
-                end
-                
-                glassObjects[obj] = isBreakable
-            end
-            
-            -- Yield alle 10 Objekte um Lag zu vermeiden
-            if i % 10 == 0 then
-                task.wait()
-            end
-        end
-    end)
-end
-
-local function createGlassEffect(obj, isBreakable)
-    local effect = Instance.new("SelectionBox")
-    effect.Name = "GlassVisionEffect"
-    effect.Adornee = obj
-    effect.LineThickness = 0.2
-    effect.Transparency = 0.3
-    effect.Color3 = isBreakable and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
-    effect.Parent = obj
-    
-    glassEffects[obj] = effect
-    return effect
-end
-
-local function enableGlassVision()
-    print("Glass Vision wird aktiviert...")
-    
-    -- Finde Glass Objekte einmalig
-    findGlassObjects()
-    
-    -- Erstelle Effekte für bekannte Objekte
-    spawn(function()
-        task.wait(1) -- Warte bis findGlassObjects() fertig ist
-        
-        for obj, isBreakable in pairs(glassObjects) do
-            if obj and obj.Parent and not glassEffects[obj] then
-                createGlassEffect(obj, isBreakable)
-            end
-        end
-    end)
-    
-    -- Minimaler Update-Loop nur für neue Objekte
-    glassVisionConnection = RunService.Heartbeat:Connect(function()
-        local currentTime = tick()
-        
-        if currentTime - glassVisionLastCheck < glassVisionCheckInterval then
-            return
-        end
-        glassVisionLastCheck = currentTime
-        
-        -- Überprüfe nur neue Objekte
-        spawn(function()
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and not glassObjects[obj] then
-                    local name = obj.Name:lower()
-                    if name:find("glass") or obj.Material == Enum.Material.Glass then
-                        local isBreakable = obj.CanCollide == false or obj.Transparency > 0.5
-                        glassObjects[obj] = isBreakable
-                        
-                        if not glassEffects[obj] then
-                            createGlassEffect(obj, isBreakable)
-                        end
-                    end
-                end
-            end
-        end)
-    end)
-end
-
-local function disableGlassVision()
-    print("Glass Vision wird deaktiviert...")
-    
-    if glassVisionConnection then
-        glassVisionConnection:Disconnect()
-        glassVisionConnection = nil
-    end
-    
-    -- Entferne alle Effekte
-    for obj, effect in pairs(glassEffects) do
-        if effect and effect.Parent then
-            effect:Destroy()
-        end
-    end
-    
-    -- Leere Caches
-    glassObjects = {}
-    glassEffects = {}
-end
-
--- Button-Funktionen
-local function createButton(name, text, position, hasCheckbox)
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Size = UDim2.new(1, 0, 0, 40)
-    button.Position = position
-    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    button.BorderSizePixel = 0
-    button.Text = text
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextScaled = true
-    button.Font = Enum.Font.SourceSans
-    button.TextXAlignment = Enum.TextXAlignment.Left
-    button.Parent = buttonContainer
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 4)
-    buttonCorner.Parent = button
-    
-    local textPadding = Instance.new("UIPadding")
-    textPadding.PaddingLeft = UDim.new(0, 10)
-    textPadding.Parent = button
-    
-    if hasCheckbox then
-        local checkbox = Instance.new("Frame")
-        checkbox.Name = "Checkbox"
-        checkbox.Size = UDim2.new(0, 20, 0, 20)
-        checkbox.Position = UDim2.new(1, -30, 0.5, -10)
-        checkbox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        checkbox.BorderSizePixel = 1
-        checkbox.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        checkbox.Parent = button
-        
-        local checkboxCorner = Instance.new("UICorner")
-        checkboxCorner.CornerRadius = UDim.new(0, 2)
-        checkboxCorner.Parent = checkbox
-        
-        local isChecked = false
-        
-        button.MouseButton1Click:Connect(function()
-            isChecked = not isChecked
-            checkbox.BackgroundColor3 = isChecked and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(70, 70, 70)
-            
-            if name == "Noclip" then
-                noclipEnabled = isChecked
-                if noclipEnabled then
-                    noclipConnection = RunService.Stepped:Connect(function()
-                        if character and character.Parent then
-                            for _, part in pairs(character:GetChildren()) do
-                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                    part.CanCollide = false
-                                end
-                            end
-                        end
-                    end)
-                else
-                    if noclipConnection then
-                        noclipConnection:Disconnect()
-                        noclipConnection = nil
-                    end
-                    if character and character.Parent then
-                        for _, part in pairs(character:GetChildren()) do
-                            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                part.CanCollide = true
-                            end
-                        end
-                    end
-                end
-            elseif name == "TugOfWar" then
-                tugOfWarEnabled = isChecked
-                if tugOfWarEnabled then
-                    enableTugOfWar()
-                else
-                    disableTugOfWar()
-                end
-            elseif name == "InfJump" then
-                infJumpEnabled = isChecked
-                if infJumpEnabled then
-                    enableInfiniteJump()
-                else
-                    disableInfiniteJump()
-                end
-            end
-        end)
-    end
-    
-    button.MouseEnter:Connect(function()
-        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
-        tween:Play()
-    end)
-    
-    button.MouseLeave:Connect(function()
-        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
-        tween:Play()
-    end)
-    
-    return button
-end
-
--- Walk Speed Button mit Slider
+-- Walk Speed Button mit Slider und kontinuierlichem Loop
 local function createWalkSpeedButton()
     local button = Instance.new("Frame")
     button.Name = "WalkSpeedButton"
@@ -498,6 +75,10 @@ local function createWalkSpeedButton()
     local currentValue = 28
     local isDragging = false
     
+    -- Variablen für kontinuierlichen Loop
+    local walkSpeedConnection = nil
+    local walkSpeedEnabled = false
+    
     local function updateSlider(value)
         currentValue = math.clamp(value, minValue, maxValue)
         local percentage = (currentValue - minValue) / (maxValue - minValue)
@@ -506,8 +87,17 @@ local function createWalkSpeedButton()
         sliderButton.Position = UDim2.new(percentage, -8, 0.5, -8)
         valueLabel.Text = tostring(math.floor(currentValue))
         
-        if character and character:FindFirstChild("Humanoid") then
-            character.Humanoid.WalkSpeed = currentValue
+        -- Starte kontinuierlichen Loop wenn noch nicht aktiv
+        if not walkSpeedEnabled then
+            walkSpeedEnabled = true
+            walkSpeedConnection = RunService.Heartbeat:Connect(function()
+                if player.Character and player.Character:FindFirstChild("Humanoid") then
+                    local humanoid = player.Character.Humanoid
+                    if humanoid.WalkSpeed ~= currentValue then
+                        humanoid.WalkSpeed = currentValue
+                    end
+                end
+            end)
         end
     end
     
@@ -534,80 +124,34 @@ local function createWalkSpeedButton()
     end)
     
     updateSlider(currentValue)
-    return button
-end
-
--- Buttons erstellen
-local redLightButton = createButton("RedLightGreenLight", "RedLight GreenLight", UDim2.new(0, 0, 0, 0), false)
-local tugOfWarButton = createButton("TugOfWar", "Tug of War", UDim2.new(0, 0, 0, 50), true)
-local glassVisionButton = createButton("GlassVision", "Glass Vision", UDim2.new(0, 0, 0, 100), false)
-local infJumpButton = createButton("InfJump", "Inf Jump", UDim2.new(0, 0, 0, 150), true)
-local walkSpeedButton = createWalkSpeedButton()
-local noclipButton = createButton("Noclip", "Noclip", UDim2.new(0, 0, 0, 250), true)
-
--- Drag-Funktionalität
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-local function updateInput(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
-local function setupDrag(element)
-    element.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    element.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            if dragging then
-                updateInput(input)
-            end
-        end
-    end)
-end
-
-setupDrag(titleLabel)
-setupDrag(minimizeButton)
-
--- Button Click Handler
-redLightButton.MouseButton1Click:Connect(function()
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        local targetCoord = redLightCoordinates[currentCoordIndex]
-        character.HumanoidRootPart.CFrame = CFrame.new(targetCoord)
-        
-        currentCoordIndex = currentCoordIndex + 1
-        if currentCoordIndex > #redLightCoordinates then
-            currentCoordIndex = 1
-        end
-        
-        print("Teleported to:", targetCoord)
-    end
-end)
-
-glassVisionButton.MouseButton1Click:Connect(function()
-    glassVisionEnabled = not glassVisionEnabled
     
-    if glassVisionEnabled then
-        enableGlassVision()
-    else
-        disableGlassVision()
+    -- Cleanup-Funktion für Walk Speed Loop
+    local function cleanupWalkSpeed()
+        if walkSpeedConnection then
+            walkSpeedConnection:Disconnect()
+            walkSpeedConnection = nil
+            walkSpeedEnabled = false
+        end
     end
-end)
+    
+    -- Cleanup bei GUI Zerstörung
+    screenGui.AncestryChanged:Connect(function()
+        if not screenGui.Parent then
+            cleanupWalkSpeed()
+        end
+    end)
+    
+    return button, cleanupWalkSpeed
+end
 
--- Character Respawn Handler
+-- Zusätzliche Variablen am Anfang des Scripts hinzufügen:
+local walkSpeedCleanup = nil
+
+-- Die createWalkSpeedButton() Funktion aufrufen:
+local walkSpeedButton, walkSpeedCleanupFunc = createWalkSpeedButton()
+walkSpeedCleanup = walkSpeedCleanupFunc
+
+-- Im Character Respawn Handler hinzufügen:
 player.CharacterAdded:Connect(function(newCharacter)
     character = newCharacter
     humanoid = character:WaitForChild("Humanoid")
@@ -629,15 +173,13 @@ player.CharacterAdded:Connect(function(newCharacter)
         enableGlassVision()
     end
     
-    local currentSpeed = 28
-    if character and character:FindFirstChild("Humanoid") then
-        character.Humanoid.WalkSpeed = currentSpeed
-    end
+    -- Walk Speed wird automatisch durch den Loop gesetzt
+    -- Keine manuelle Setzung nötig
     
     currentCoordIndex = 1
 end)
 
--- Cleanup bei GUI Zerstörung
+-- Im Cleanup-Bereich am Ende hinzufügen:
 screenGui.AncestryChanged:Connect(function()
     if not screenGui.Parent then
         disableGlassVision()
@@ -647,7 +189,10 @@ screenGui.AncestryChanged:Connect(function()
         if noclipConnection then
             noclipConnection:Disconnect()
         end
+        
+        -- Walk Speed Cleanup
+        if walkSpeedCleanup then
+            walkSpeedCleanup()
+        end
     end
 end)
-
-print("Optimized Ink Game GUI loaded - Alle Lag-Probleme behoben!")
