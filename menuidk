@@ -4,8 +4,10 @@ local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 
+
 -- Local player
 local localPlayer = Players.LocalPlayer
+
 
 -- Default‑Settings
 local menuWidth           = 400
@@ -257,6 +259,66 @@ local function doStepOnMe(player)
         end)
     end
 end
+
+local orbitConnection
+local function doOrbitPlayer(player)
+    if orbitConnection then
+        orbitConnection:Disconnect()
+        orbitConnection = nil
+        return
+    end
+
+    if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and
+       localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+
+        local angle = 0
+        local radius = 4
+        local heightOffset = 1.5
+
+        orbitConnection = RunService.Heartbeat:Connect(function()
+            if not (player.Character and player.Character:FindFirstChild("HumanoidRootPart")) then
+                orbitConnection:Disconnect()
+                orbitConnection = nil
+                return
+            end
+
+            local targetHRP = player.Character.HumanoidRootPart
+            local myHRP     = localPlayer.Character.HumanoidRootPart
+
+            angle = angle + math.rad(2)  -- Drehgeschwindigkeit
+
+            local offset = Vector3.new(math.cos(angle) * radius, heightOffset, math.sin(angle) * radius)
+            local newPos = targetHRP.Position + offset
+
+            myHRP.CFrame = CFrame.new(newPos, targetHRP.Position)
+            myHRP.Velocity = Vector3.zero
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+        end)
+    end
+end
+
+local stompConnection
+local function doStompLoop(player)
+    if stompConnection then
+        stompConnection:Disconnect()
+        stompConnection = nil
+        return
+    end
+
+    stompConnection = RunService.Heartbeat:Connect(function()
+        if player.Character and player.Character:FindFirstChild("Head") and
+           localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+
+            local head = player.Character.Head
+            local myHRP = localPlayer.Character.HumanoidRootPart
+
+            myHRP.CFrame = head.CFrame + Vector3.new(0, 2.5, 0)
+            myHRP.Velocity = Vector3.zero
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+        end
+    end)
+end
+
 --------------------------------------------------------------------------------
 -- GUI SETUP
 --------------------------------------------------------------------------------
@@ -690,6 +752,10 @@ local function showPlayerDetails(player)
     createActionButton("Anti Invisible", function() toggleAntiInvisible(player) end, toggleAntiInvisible)
     createActionButton("Bang",           function() doBang(player) end,         doBang)
     createActionButton("Headsit",        function() doHeadsit(player) end,      doHeadsit)
+	createActionButton("Orbit", function() doOrbitPlayer(player) end, doOrbitPlayer)
+	createActionButton("Stomp Loop", function() doStompLoop(player) end, doStompLoop)
+
+
 
     detailsFrame.Visible = true
 end
