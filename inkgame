@@ -38,6 +38,9 @@ local glassVisionLastCheck = 0
 local glassVisionCheckInterval = 2.0 -- Nur alle 2 Sekunden prüfen
 local glassObjects = {} -- Cache für Glass Objekte
 local glassEffects = {} -- Cache für Effekte
+local guiVisible = true
+local isMinimized = false
+
 
 -- RedLight GreenLight Koordinaten
 local redLightCoordinates = {
@@ -68,7 +71,7 @@ corner.Parent = mainFrame
 -- Titel
 local titleLabel = Instance.new("TextButton")
 titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(0.85, 0, 0, 50)
+titleLabel.Size = UDim2.new(0.7, 0, 0, 50)
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
 titleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 titleLabel.BorderSizePixel = 0
@@ -82,7 +85,7 @@ titleLabel.Parent = mainFrame
 local minimizeButton = Instance.new("TextButton")
 minimizeButton.Name = "MinimizeButton"
 minimizeButton.Size = UDim2.new(0.15, 0, 0, 50)
-minimizeButton.Position = UDim2.new(0.85, 0, 0, 0)
+minimizeButton.Position = UDim2.new(0.7, 0, 0, 0)
 minimizeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 minimizeButton.BorderSizePixel = 0
 minimizeButton.Text = "-"
@@ -90,6 +93,19 @@ minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 minimizeButton.TextScaled = true
 minimizeButton.Font = Enum.Font.SourceSansBold
 minimizeButton.Parent = mainFrame
+
+-- Close Button (X)
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0.15, 0, 0, 50)
+closeButton.Position = UDim2.new(0.85, 0, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextScaled = true
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.Parent = mainFrame
 
 -- Titel Ecken
 local titleCorner = Instance.new("UICorner")
@@ -101,6 +117,70 @@ local minimizeCorner = Instance.new("UICorner")
 minimizeCorner.CornerRadius = UDim.new(0, 8)
 minimizeCorner.Parent = minimizeButton
 
+-- Close Button Ecken
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
+
+-- Cleanup-Funktion
+local function cleanupAll()
+    -- Alle Connections beenden
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    
+    if infJumpConnection then
+        infJumpConnection:Disconnect()
+        infJumpConnection = nil
+    end
+    
+    disableGlassVision()
+    disableTugOfWar()
+    
+    -- Walk Speed Cleanup
+    if walkSpeedCleanup then
+        walkSpeedCleanup()
+    end
+    
+    -- Character zurücksetzen
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.WalkSpeed = 16
+        character.Humanoid.JumpPower = originalJumpPower
+    end
+    
+    if character then
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- X-Button Click Event - Führt Cleanup aus und zerstört die GUI
+closeButton.MouseButton1Click:Connect(function()
+    cleanupAll()                 
+    screenGui:Destroy()          
+end)
+
+-- Hover-Effekte für den X-Button
+closeButton.MouseEnter:Connect(function()
+    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(240, 73, 89)})
+    tween:Play()
+end)
+
+closeButton.MouseLeave:Connect(function()
+    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 53, 69)})
+    tween:Play()
+end)
+
+-- Close Button Funktionalität
+closeButton.MouseButton1Click:Connect(function()
+    cleanupAll()
+    screenGui:Destroy()
+end)
+
 -- Minimize Funktionalität
 minimizeButton.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
@@ -109,6 +189,17 @@ minimizeButton.MouseButton1Click:Connect(function()
     local tween = TweenService:Create(mainFrame, tweenInfo, {Size = targetSize})
     
     minimizeButton.Text = isMinimized and "+" or "-"
+    tween:Play()
+end)
+
+-- Hover-Effekte für Close Button
+closeButton.MouseEnter:Connect(function()
+    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(240, 73, 89)})
+    tween:Play()
+end)
+
+closeButton.MouseLeave:Connect(function()
+    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 53, 69)})
     tween:Play()
 end)
 
@@ -607,7 +698,6 @@ local function setupDrag(element)
 end
 
 setupDrag(titleLabel)
-setupDrag(minimizeButton)
 
 -- Button Click Handler
 redLightButton.MouseButton1Click:Connect(function()
@@ -665,19 +755,20 @@ end)
 -- Cleanup bei GUI Zerstörung
 screenGui.AncestryChanged:Connect(function()
     if not screenGui.Parent then
-        disableGlassVision()
-        disableTugOfWar()
-        disableInfiniteJump()
-        
-        if noclipConnection then
-            noclipConnection:Disconnect()
-        end
-        
-        -- Walk Speed Cleanup
-        if walkSpeedCleanup then
-            walkSpeedCleanup()
+        cleanupAll()
+    end
+end)
+
+-- GUI Toggle über Taste "H" (nur sichtbar/unsichtbar, Funktionen bleiben an)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.H then
+        if screenGui and screenGui.Parent then
+            guiVisible = not guiVisible
+            screenGui.Enabled = guiVisible
         end
     end
 end)
 
-print("Optimized Ink Game GUI loaded - Alle Lag-Probleme behoben! Walk Speed Loop aktiviert!")
+
+print("Optimized Ink Game GUI loaded mit Close Button - Alle Lag-Probleme behoben! Walk Speed Loop aktiviert!")
