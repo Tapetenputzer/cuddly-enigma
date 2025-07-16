@@ -10,7 +10,7 @@ local Lighting = game:GetService("Lighting")
 
 local Window = Fluent:CreateWindow({
     Title = "Banana Eats Script",
-    SubTitle = "by Tapetenputzer",
+    SubTitle = "by Massivendurchfall",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
@@ -1154,7 +1154,7 @@ Players.LocalPlayer.CharacterAdded:Connect(function(character)
 end)
 
 Fluent:Notify({
-    Title = "Tapetenputzer",
+    Title = "Massivendurchfall",
     Content = "Script Loaded Successfully!",
     Duration = 5
 })
