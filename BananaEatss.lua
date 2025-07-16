@@ -7,6 +7,11 @@ local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
+local GuiService = game:GetService("GuiService")
+local TextChatService = game:GetService("TextChatService")
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local isGuiVisible = true
 
 local Window = Fluent:CreateWindow({
     Title = "Banana Eats Script",
@@ -15,12 +20,13 @@ local Window = Fluent:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = isMobile and nil or Enum.KeyCode.LeftControl
 })
 
 local Tabs = {
     ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
     Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+    Auto = Window:AddTab({ Title = "Auto", Icon = "zap" }),
     Visual = Window:AddTab({ Title = "Visual", Icon = "sun" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
@@ -60,6 +66,7 @@ local noFogActive, noFogLoop = false, nil
 local autoDeletePeelsActive, autoDeletePeelsThread = false, nil
 local autoCollectCoinsActive, autoCollectCoinsThread = false, nil
 local autoDeleteLockersActive, autoDeleteLockersThread = false, nil
+local autoKillActive, autoKillThread = false, nil
 local antiKickConnection = nil
 
 local antiAfkConnection = nil
@@ -421,34 +428,109 @@ local function enableFly()
         flyBodyGyro.CFrame = root.CFrame
         flyActive = true
 
-        flyConnection = RunService.RenderStepped:Connect(function()
-            local direction = Vector3.new(0, 0, 0)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                direction = direction + workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                direction = direction - workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                direction = direction - workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                direction = direction + workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                direction = direction + Vector3.new(0, 1, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                direction = direction - Vector3.new(0, 1, 0)
+        if isMobile then
+            local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+            local flyGui = Instance.new("ScreenGui")
+            flyGui.Name = "FlyControlsGUI"
+            flyGui.ResetOnSpawn = false
+            flyGui.Parent = playerGui
+
+            local function createFlyButton(text, position, size)
+                local button = Instance.new("TextButton")
+                button.Text = text
+                button.Size = size
+                button.Position = position
+                button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                button.TextScaled = true
+                button.Font = Enum.Font.GothamBold
+                button.Parent = flyGui
+                
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(0, 8)
+                corner.Parent = button
+                
+                return button
             end
 
-            if direction.Magnitude > 0 then
+            local upButton = createFlyButton("↑", UDim2.new(0.5, -40, 0.3, 0), UDim2.new(0, 80, 0, 60))
+            local downButton = createFlyButton("↓", UDim2.new(0.5, -40, 0.7, 0), UDim2.new(0, 80, 0, 60))
+            local forwardButton = createFlyButton("▲", UDim2.new(0.5, -40, 0.4, 0), UDim2.new(0, 80, 0, 60))
+            local backwardButton = createFlyButton("▼", UDim2.new(0.5, -40, 0.6, 0), UDim2.new(0, 80, 0, 60))
+            local leftButton = createFlyButton("◄", UDim2.new(0.3, -40, 0.5, 0), UDim2.new(0, 80, 0, 60))
+            local rightButton = createFlyButton("►", UDim2.new(0.7, -40, 0.5, 0), UDim2.new(0, 80, 0, 60))
+
+            flyConnection = RunService.RenderStepped:Connect(function()
+                local direction = Vector3.new(0, 0, 0)
+                
+                if upButton.Parent and GuiService:IsTenFootInterface() then
+                    return
+                end
+                
                 flyBodyVelocity.Velocity = direction.Unit * flySpeed
-            else
-                flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            end)
+
+            local function handleMobileInput(button, directionVector)
+                local inputBegan, inputEnded
+                
+                inputBegan = button.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.Touch then
+                        flyConnection:Disconnect()
+                        flyConnection = RunService.RenderStepped:Connect(function()
+                            flyBodyVelocity.Velocity = directionVector.Unit * flySpeed
+                            flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
+                        end)
+                    end
+                end)
+                
+                inputEnded = button.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.Touch then
+                        flyConnection:Disconnect()
+                        flyConnection = RunService.RenderStepped:Connect(function()
+                            flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                            flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
+                        end)
+                    end
+                end)
             end
-            flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
-        end)
+
+            handleMobileInput(forwardButton, workspace.CurrentCamera.CFrame.LookVector)
+            handleMobileInput(backwardButton, -workspace.CurrentCamera.CFrame.LookVector)
+            handleMobileInput(leftButton, -workspace.CurrentCamera.CFrame.RightVector)
+            handleMobileInput(rightButton, workspace.CurrentCamera.CFrame.RightVector)
+            handleMobileInput(upButton, Vector3.new(0, 1, 0))
+            handleMobileInput(downButton, Vector3.new(0, -1, 0))
+        else
+            flyConnection = RunService.RenderStepped:Connect(function()
+                local direction = Vector3.new(0, 0, 0)
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    direction = direction + workspace.CurrentCamera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    direction = direction - workspace.CurrentCamera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    direction = direction - workspace.CurrentCamera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    direction = direction + workspace.CurrentCamera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    direction = direction + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    direction = direction - Vector3.new(0, 1, 0)
+                end
+
+                if direction.Magnitude > 0 then
+                    flyBodyVelocity.Velocity = direction.Unit * flySpeed
+                else
+                    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                end
+                flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            end)
+        end
     end
 end
 
@@ -465,6 +547,16 @@ local function disableFly()
     if flyConnection then
         flyConnection:Disconnect()
         flyConnection = nil
+    end
+    
+    if isMobile then
+        local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            local flyGui = playerGui:FindFirstChild("FlyControlsGUI")
+            if flyGui then
+                flyGui:Destroy()
+            end
+        end
     end
 end
 
@@ -528,6 +620,41 @@ local function autoDeleteLockersFunc()
             end
         end)
         task.wait(5)
+    end
+end
+
+local function autoKillFunc()
+    while autoKillActive do
+        pcall(function()
+            local localPlayer = Players.LocalPlayer
+            local localChar = localPlayer.Character
+            local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+            
+            if localHrp and localPlayer.Team and localPlayer.Team.Name == "Banana" then
+                local targetPlayer = nil
+                local shortestDistance = math.huge
+                
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= localPlayer and player.Team and player.Team.Name == "Runners" then
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local distance = (localHrp.Position - hrp.Position).Magnitude
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                targetPlayer = player
+                            end
+                        end
+                    end
+                end
+                
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetPos = targetPlayer.Character.HumanoidRootPart.Position
+                    localHrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 2, 0))
+                end
+            end
+        end)
+        task.wait(1)
     end
 end
 
@@ -706,8 +833,8 @@ Tabs.Player:AddSlider("WalkSpeedSlider", {
     Title = "Walk Speed",
     Description = "Adjust your walking speed",
     Default = 16,
-    Min = 0,
-    Max = 200,
+    Min = 16,
+    Max = 45,
     Rounding = 0,
     Callback = function(value)
         currentSpeed = value
@@ -752,83 +879,6 @@ Tabs.Player:AddButton({
     end
 })
 
-local SpeedPresetsSection = Tabs.Player:AddSection("Speed Presets")
-
-SpeedPresetsSection:AddButton({
-    Title = "Normal (16)",
-    Callback = function()
-        currentSpeed = 16
-        local char = Players.LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 16
-        end
-        if speedLoop then task.cancel(speedLoop); speedLoop = nil end
-    end
-})
-
-SpeedPresetsSection:AddButton({
-    Title = "Fast (50)",
-    Callback = function()
-        currentSpeed = 50
-        local char = Players.LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 50
-        end
-        if speedLoop then task.cancel(speedLoop) end
-        speedLoop = task.spawn(function()
-            while currentSpeed == 50 do
-                local c = Players.LocalPlayer.Character
-                if c and c:FindFirstChild("Humanoid") then
-                    c.Humanoid.WalkSpeed = 50
-                end
-                task.wait(0.1)
-            end
-        end)
-    end
-})
-
-SpeedPresetsSection:AddButton({
-    Title = "Super Fast (100)",
-    Callback = function()
-        currentSpeed = 100
-        local char = Players.LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 100
-        end
-        if speedLoop then task.cancel(speedLoop) end
-        speedLoop = task.spawn(function()
-            while currentSpeed == 100 do
-                local c = Players.LocalPlayer.Character
-                if c and c:FindFirstChild("Humanoid") then
-                    c.Humanoid.WalkSpeed = 100
-                end
-                task.wait(0.1)
-            end
-        end)
-    end
-})
-
-SpeedPresetsSection:AddButton({
-    Title = "Sonic (200)",
-    Callback = function()
-        currentSpeed = 200
-        local char = Players.LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 200
-        end
-        if speedLoop then task.cancel(speedLoop) end
-        speedLoop = task.spawn(function()
-            while currentSpeed == 200 do
-                local c = Players.LocalPlayer.Character
-                if c and c:FindFirstChild("Humanoid") then
-                    c.Humanoid.WalkSpeed = 200
-                end
-                task.wait(0.1)
-            end
-        end)
-    end
-})
-
 Tabs.Player:AddToggle("FlyToggle", {
     Title = "Fly (Local)",
     Default = false,
@@ -865,7 +915,7 @@ Tabs.Player:AddToggle("AntiAFKToggle", {
     end
 })
 
-local AutoSection = Tabs.Player:AddSection("Auto Features")
+local AutoSection = Tabs.Auto:AddSection("Auto Features")
 
 AutoSection:AddToggle("AutoCollectCoins", {
     Title = "Auto Collect Coins",
@@ -908,6 +958,21 @@ AutoSection:AddToggle("AutoDeleteLockers", {
         else
             if autoDeleteLockersThread then task.cancel(autoDeleteLockersThread) end
             autoDeleteLockersThread = nil
+        end
+    end
+})
+
+AutoSection:AddToggle("AutoKill", {
+    Title = "Auto Kill",
+    Default = false,
+    Callback = function(state)
+        autoKillActive = state
+        if state then
+            if autoKillThread then task.cancel(autoKillThread) end
+            autoKillThread = task.spawn(autoKillFunc)
+        else
+            if autoKillThread then task.cancel(autoKillThread) end
+            autoKillThread = nil
         end
     end
 })
@@ -1134,6 +1199,125 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
+local function createMobileGUIButton()
+    if not isMobile then return end
+    
+    local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+    local mobileGui = Instance.new("ScreenGui")
+    mobileGui.Name = "MobileGUIToggle"
+    mobileGui.ResetOnSpawn = false
+    mobileGui.Parent = playerGui
+
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Text = "🎮"
+    toggleButton.Size = UDim2.new(0, 60, 0, 60)
+    toggleButton.Position = UDim2.new(1, -70, 0, 10)
+    toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.TextScaled = true
+    toggleButton.Font = Enum.Font.GothamBold
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Parent = mobileGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 30)
+    corner.Parent = toggleButton
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 100, 100)
+    stroke.Thickness = 2
+    stroke.Parent = toggleButton
+
+    toggleButton.MouseButton1Click:Connect(function()
+        isGuiVisible = not isGuiVisible
+        if Window and Window.Root then
+            Window.Root.Visible = isGuiVisible
+        end
+        toggleButton.Text = isGuiVisible and "🎮" or "📱"
+        toggleButton.BackgroundColor3 = isGuiVisible and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(60, 60, 60)
+    end)
+
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    toggleButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = toggleButton.Position
+        end
+    end)
+
+    toggleButton.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    toggleButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function setupChatCommands()
+    local function onChatted(message)
+        local msg = message:lower()
+        if msg == "/gui" or msg == "/menu" or msg == "/toggle" then
+            isGuiVisible = not isGuiVisible
+            if Window and Window.Root then
+                Window.Root.Visible = isGuiVisible
+            end
+            
+            local statusText = isGuiVisible and "opened" or "closed"
+            Fluent:Notify({
+                Title = "GUI Toggle",
+                Content = "Menu " .. statusText .. " via chat command",
+                Duration = 2
+            })
+        elseif msg == "/help" then
+            Fluent:Notify({
+                Title = "Chat Commands",
+                Content = "/gui, /menu, /toggle - Toggle GUI\n/help - Show this help",
+                Duration = 5
+            })
+        end
+    end
+
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        TextChatService.MessageReceived:Connect(function(textChatMessage)
+            if textChatMessage.TextSource and textChatMessage.TextSource.UserId == Players.LocalPlayer.UserId then
+                onChatted(textChatMessage.Text)
+            end
+        end)
+    else
+        Players.LocalPlayer.Chatted:Connect(onChatted)
+    end
+end
+
+if isMobile then
+    task.wait(2)
+    createMobileGUIButton()
+    setupChatCommands()
+    
+    Fluent:Notify({
+        Title = "Mobile Mode Detected",
+        Content = "Touch the 🎮 button or use /gui to toggle menu",
+        Duration = 8
+    })
+else
+    setupChatCommands()
+    Fluent:Notify({
+        Title = "Desktop Mode",
+        Content = "Use Left Ctrl or /gui to toggle menu",
+        Duration = 5
+    })
+end
+
 Players.LocalPlayer.CharacterAdded:Connect(function(character)
     character:WaitForChild("HumanoidRootPart")
     task.wait(0.5)
@@ -1160,4 +1344,4 @@ Fluent:Notify({
 })
 
 Window:SelectTab(1)
-print("Banana Eats Script Loaded!")
+print("Banana Eats Script - Enhanced Version Loaded!")
