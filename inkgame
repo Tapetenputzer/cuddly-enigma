@@ -1,774 +1,538 @@
--- Roblox Ink Game GUI Script - Optimiert für Performance
--- Für Executor verwendung - Alle Lag-Probleme behoben
-
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Variablen für Funktionen
-local noclipEnabled = false
-local infJumpEnabled = false
-local originalJumpPower = humanoid.JumpPower
-local noclipConnection = nil
-local infJumpConnection = nil
-local isMinimized = false
-local originalSize = UDim2.new(0, 300, 0, 400)
-local minimizedSize = UDim2.new(0, 300, 0, 50)
-
--- Game spezifische Variablen
-local tugOfWarEnabled = false
-local tugOfWarConnection = nil
-local glassVisionEnabled = false
-local glassVisionConnection = nil
-
--- Walk Speed Variablen
-local walkSpeedCleanup = nil
-
--- Performance Optimierung für alle Funktionen
-local tugOfWarLastCheck = 0
-local tugOfWarCheckInterval = 0.1
-local glassVisionLastCheck = 0
-local glassVisionCheckInterval = 2.0 -- Nur alle 2 Sekunden prüfen
-local glassObjects = {} -- Cache für Glass Objekte
-local glassEffects = {} -- Cache für Effekte
-local guiVisible = true
-local isMinimized = false
-
-
--- RedLight GreenLight Koordinaten
-local redLightCoordinates = {
-    Vector3.new(-49.88, 1023.10, 83.59),  
-}
-local currentCoordIndex = 1
-
--- GUI erstellen
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "InkGameGUI"
+screenGui.Name = "INK_GAME_GUI"
 screenGui.Parent = playerGui
 
--- Haupt Frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = originalSize
-mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.Size = UDim2.new(0, 250, 0, 400)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
+mainFrame.Active = true
+mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
--- Abgerundete Ecken
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = mainFrame
 
--- Titel
-local titleLabel = Instance.new("TextButton")
-titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(0.7, 0, 0, 50)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-titleLabel.BorderSizePixel = 0
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, -40, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "INK GAME"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.Parent = mainFrame
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
 
--- Minimize Button
-local minimizeButton = Instance.new("TextButton")
-minimizeButton.Name = "MinimizeButton"
-minimizeButton.Size = UDim2.new(0.15, 0, 0, 50)
-minimizeButton.Position = UDim2.new(0.7, 0, 0, 0)
-minimizeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-minimizeButton.BorderSizePixel = 0
-minimizeButton.Text = "-"
-minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeButton.TextScaled = true
-minimizeButton.Font = Enum.Font.SourceSansBold
-minimizeButton.Parent = mainFrame
-
--- Close Button (X)
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0.15, 0, 0, 50)
-closeButton.Position = UDim2.new(0.85, 0, 0, 0)
+closeButton.Size = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -30, 0, 5)
 closeButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
 closeButton.BorderSizePixel = 0
 closeButton.Text = "X"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.TextScaled = true
-closeButton.Font = Enum.Font.SourceSansBold
-closeButton.Parent = mainFrame
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = titleBar
 
--- Titel Ecken
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = titleLabel
-
--- Minimize Button Ecken
-local minimizeCorner = Instance.new("UICorner")
-minimizeCorner.CornerRadius = UDim.new(0, 8)
-minimizeCorner.Parent = minimizeButton
-
--- Close Button Ecken
 local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.CornerRadius = UDim.new(0, 4)
 closeCorner.Parent = closeButton
 
--- Cleanup-Funktion
-local function cleanupAll()
-    -- Alle Connections beenden
-    if noclipConnection then
-        noclipConnection:Disconnect()
-        noclipConnection = nil
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Size = UDim2.new(1, -20, 1, -55)
+contentFrame.Position = UDim2.new(0, 10, 0, 45)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+local redLightFrame = Instance.new("Frame")
+redLightFrame.Name = "RedLightFrame"
+redLightFrame.Size = UDim2.new(1, 0, 0, 30)
+redLightFrame.Position = UDim2.new(0, 0, 0, 0)
+redLightFrame.BackgroundTransparency = 1
+redLightFrame.Parent = contentFrame
+
+local redLightLabel = Instance.new("TextLabel")
+redLightLabel.Name = "RedLightLabel"
+redLightLabel.Size = UDim2.new(1, -50, 1, 0)
+redLightLabel.Position = UDim2.new(0, 0, 0, 0)
+redLightLabel.BackgroundTransparency = 1
+redLightLabel.Text = "RedLight GreenLight"
+redLightLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+redLightLabel.TextScaled = true
+redLightLabel.Font = Enum.Font.Gotham
+redLightLabel.TextXAlignment = Enum.TextXAlignment.Left
+redLightLabel.Parent = redLightFrame
+
+local redLightButton = Instance.new("TextButton")
+redLightButton.Name = "RedLightButton"
+redLightButton.Size = UDim2.new(0, 40, 0, 20)
+redLightButton.Position = UDim2.new(1, -40, 0, 5)
+redLightButton.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+redLightButton.BorderSizePixel = 0
+redLightButton.Text = ""
+redLightButton.Parent = redLightFrame
+
+local redLightButtonCorner = Instance.new("UICorner")
+redLightButtonCorner.CornerRadius = UDim.new(0, 10)
+redLightButtonCorner.Parent = redLightButton
+
+local infJumpFrame = Instance.new("Frame")
+infJumpFrame.Name = "InfJumpFrame"
+infJumpFrame.Size = UDim2.new(1, 0, 0, 30)
+infJumpFrame.Position = UDim2.new(0, 0, 0, 40)
+infJumpFrame.BackgroundTransparency = 1
+infJumpFrame.Parent = contentFrame
+
+local infJumpLabel = Instance.new("TextLabel")
+infJumpLabel.Name = "InfJumpLabel"
+infJumpLabel.Size = UDim2.new(1, -50, 1, 0)
+infJumpLabel.Position = UDim2.new(0, 0, 0, 0)
+infJumpLabel.BackgroundTransparency = 1
+infJumpLabel.Text = "Inf Jump"
+infJumpLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+infJumpLabel.TextScaled = true
+infJumpLabel.Font = Enum.Font.Gotham
+infJumpLabel.TextXAlignment = Enum.TextXAlignment.Left
+infJumpLabel.Parent = infJumpFrame
+
+local infJumpToggle = Instance.new("TextButton")
+infJumpToggle.Name = "InfJumpToggle"
+infJumpToggle.Size = UDim2.new(0, 40, 0, 20)
+infJumpToggle.Position = UDim2.new(1, -40, 0, 5)
+infJumpToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+infJumpToggle.BorderSizePixel = 0
+infJumpToggle.Text = ""
+infJumpToggle.Parent = infJumpFrame
+
+local infJumpToggleCorner = Instance.new("UICorner")
+infJumpToggleCorner.CornerRadius = UDim.new(0, 10)
+infJumpToggleCorner.Parent = infJumpToggle
+
+local walkSpeedFrame = Instance.new("Frame")
+walkSpeedFrame.Name = "WalkSpeedFrame"
+walkSpeedFrame.Size = UDim2.new(1, 0, 0, 50)
+walkSpeedFrame.Position = UDim2.new(0, 0, 0, 80)
+walkSpeedFrame.BackgroundTransparency = 1
+walkSpeedFrame.Parent = contentFrame
+
+local walkSpeedLabel = Instance.new("TextLabel")
+walkSpeedLabel.Name = "WalkSpeedLabel"
+walkSpeedLabel.Size = UDim2.new(1, 0, 0, 20)
+walkSpeedLabel.Position = UDim2.new(0, 0, 0, 0)
+walkSpeedLabel.BackgroundTransparency = 1
+walkSpeedLabel.Text = "Walk Speed"
+walkSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkSpeedLabel.TextScaled = true
+walkSpeedLabel.Font = Enum.Font.Gotham
+walkSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+walkSpeedLabel.Parent = walkSpeedFrame
+
+local walkSpeedSlider = Instance.new("Frame")
+walkSpeedSlider.Name = "WalkSpeedSlider"
+walkSpeedSlider.Size = UDim2.new(1, -50, 0, 20)
+walkSpeedSlider.Position = UDim2.new(0, 0, 0, 25)
+walkSpeedSlider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+walkSpeedSlider.BorderSizePixel = 0
+walkSpeedSlider.Parent = walkSpeedFrame
+
+local walkSpeedSliderCorner = Instance.new("UICorner")
+walkSpeedSliderCorner.CornerRadius = UDim.new(0, 10)
+walkSpeedSliderCorner.Parent = walkSpeedSlider
+
+local walkSpeedKnob = Instance.new("TextButton")
+walkSpeedKnob.Name = "WalkSpeedKnob"
+walkSpeedKnob.Size = UDim2.new(0, 20, 0, 20)
+walkSpeedKnob.Position = UDim2.new(0.5, -10, 0, 0)
+walkSpeedKnob.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+walkSpeedKnob.BorderSizePixel = 0
+walkSpeedKnob.Text = ""
+walkSpeedKnob.Parent = walkSpeedSlider
+
+local walkSpeedKnobCorner = Instance.new("UICorner")
+walkSpeedKnobCorner.CornerRadius = UDim.new(0, 10)
+walkSpeedKnobCorner.Parent = walkSpeedKnob
+
+local walkSpeedValue = Instance.new("TextLabel")
+walkSpeedValue.Name = "WalkSpeedValue"
+walkSpeedValue.Size = UDim2.new(0, 40, 0, 20)
+walkSpeedValue.Position = UDim2.new(1, -40, 0, 25)
+walkSpeedValue.BackgroundTransparency = 1
+walkSpeedValue.Text = "27"
+walkSpeedValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkSpeedValue.TextScaled = true
+walkSpeedValue.Font = Enum.Font.Gotham
+walkSpeedValue.TextXAlignment = Enum.TextXAlignment.Center
+walkSpeedValue.Parent = walkSpeedFrame
+
+local noclipFrame = Instance.new("Frame")
+noclipFrame.Name = "NoclipFrame"
+noclipFrame.Size = UDim2.new(1, 0, 0, 30)
+noclipFrame.Position = UDim2.new(0, 0, 0, 140)
+noclipFrame.BackgroundTransparency = 1
+noclipFrame.Parent = contentFrame
+
+local noclipLabel = Instance.new("TextLabel")
+noclipLabel.Name = "NoclipLabel"
+noclipLabel.Size = UDim2.new(1, -50, 1, 0)
+noclipLabel.Position = UDim2.new(0, 0, 0, 0)
+noclipLabel.BackgroundTransparency = 1
+noclipLabel.Text = "Noclip"
+noclipLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+noclipLabel.TextScaled = true
+noclipLabel.Font = Enum.Font.Gotham
+noclipLabel.TextXAlignment = Enum.TextXAlignment.Left
+noclipLabel.Parent = noclipFrame
+
+local noclipToggle = Instance.new("TextButton")
+noclipToggle.Name = "NoclipToggle"
+noclipToggle.Size = UDim2.new(0, 40, 0, 20)
+noclipToggle.Position = UDim2.new(1, -40, 0, 5)
+noclipToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+noclipToggle.BorderSizePixel = 0
+noclipToggle.Text = ""
+noclipToggle.Parent = noclipFrame
+
+local noclipToggleCorner = Instance.new("UICorner")
+noclipToggleCorner.CornerRadius = UDim.new(0, 10)
+noclipToggleCorner.Parent = noclipToggle
+
+local followPlayerFrame = Instance.new("Frame")
+followPlayerFrame.Name = "FollowPlayerFrame"
+followPlayerFrame.Size = UDim2.new(1, 0, 0, 70)
+followPlayerFrame.Position = UDim2.new(0, 0, 0, 180)
+followPlayerFrame.BackgroundTransparency = 1
+followPlayerFrame.Parent = contentFrame
+
+local followPlayerLabel = Instance.new("TextLabel")
+followPlayerLabel.Name = "FollowPlayerLabel"
+followPlayerLabel.Size = UDim2.new(1, 0, 0, 20)
+followPlayerLabel.Position = UDim2.new(0, 0, 0, 0)
+followPlayerLabel.BackgroundTransparency = 1
+followPlayerLabel.Text = "Follow Player"
+followPlayerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+followPlayerLabel.TextScaled = true
+followPlayerLabel.Font = Enum.Font.Gotham
+followPlayerLabel.TextXAlignment = Enum.TextXAlignment.Left
+followPlayerLabel.Parent = followPlayerFrame
+
+local followPlayerInput = Instance.new("TextBox")
+followPlayerInput.Name = "FollowPlayerInput"
+followPlayerInput.Size = UDim2.new(1, -50, 0, 20)
+followPlayerInput.Position = UDim2.new(0, 0, 0, 25)
+followPlayerInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+followPlayerInput.BorderSizePixel = 0
+followPlayerInput.Text = "Player Name"
+followPlayerInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+followPlayerInput.TextScaled = true
+followPlayerInput.Font = Enum.Font.Gotham
+followPlayerInput.TextXAlignment = Enum.TextXAlignment.Center
+followPlayerInput.Parent = followPlayerFrame
+
+local followPlayerInputCorner = Instance.new("UICorner")
+followPlayerInputCorner.CornerRadius = UDim.new(0, 4)
+followPlayerInputCorner.Parent = followPlayerInput
+
+local followPlayerToggle = Instance.new("TextButton")
+followPlayerToggle.Name = "FollowPlayerToggle"
+followPlayerToggle.Size = UDim2.new(0, 40, 0, 20)
+followPlayerToggle.Position = UDim2.new(1, -40, 0, 25)
+followPlayerToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+followPlayerToggle.BorderSizePixel = 0
+followPlayerToggle.Text = ""
+followPlayerToggle.Parent = followPlayerFrame
+
+local followPlayerToggleCorner = Instance.new("UICorner")
+followPlayerToggleCorner.CornerRadius = UDim.new(0, 10)
+followPlayerToggleCorner.Parent = followPlayerToggle
+
+local followPlayerStatus = Instance.new("TextLabel")
+followPlayerStatus.Name = "FollowPlayerStatus"
+followPlayerStatus.Size = UDim2.new(1, 0, 0, 20)
+followPlayerStatus.Position = UDim2.new(0, 0, 0, 50)
+followPlayerStatus.BackgroundTransparency = 1
+followPlayerStatus.Text = "Status: OFF"
+followPlayerStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+followPlayerStatus.TextScaled = true
+followPlayerStatus.Font = Enum.Font.Gotham
+followPlayerStatus.TextXAlignment = Enum.TextXAlignment.Left
+followPlayerStatus.Parent = followPlayerFrame
+
+local infJumpEnabled = false
+local noclipEnabled = false
+local walkSpeedEnabled = false
+local currentWalkSpeed = 27
+local followPlayerEnabled = false
+local targetPlayer = nil
+local connections = {}
+
+local function updateToggleAppearance(toggle, enabled)
+    if enabled then
+        toggle.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    else
+        toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    end
+end
+
+local function setupInfJump()
+    if infJumpEnabled then
+        connections.infJump = UserInputService.JumpRequest:Connect(function()
+            local character = player.Character
+            if character and character:FindFirstChild("Humanoid") then
+                character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    else
+        if connections.infJump then
+            connections.infJump:Disconnect()
+            connections.infJump = nil
+        end
+    end
+end
+
+local function setupWalkSpeed()
+    if connections.walkSpeed then
+        connections.walkSpeed:Disconnect()
     end
     
-    if infJumpConnection then
-        infJumpConnection:Disconnect()
-        infJumpConnection = nil
-    end
-    
-    disableGlassVision()
-    disableTugOfWar()
-    
-    -- Walk Speed Cleanup
-    if walkSpeedCleanup then
-        walkSpeedCleanup()
-    end
-    
-    -- Character zurücksetzen
-    if character and character:FindFirstChild("Humanoid") then
-        character.Humanoid.WalkSpeed = 16
-        character.Humanoid.JumpPower = originalJumpPower
-    end
-    
-    if character then
-        for _, part in pairs(character:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.CanCollide = true
+    connections.walkSpeed = RunService.Heartbeat:Connect(function()
+        local character = player.Character
+        if character and character:FindFirstChild("Humanoid") then
+            character.Humanoid.WalkSpeed = currentWalkSpeed
+        end
+    end)
+end
+
+local function setupNoclip()
+    if noclipEnabled then
+        connections.noclip = RunService.Stepped:Connect(function()
+            local character = player.Character
+            if character then
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        if connections.noclip then
+            connections.noclip:Disconnect()
+            connections.noclip = nil
+        end
+        
+        local character = player.Character
+        if character then
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
             end
         end
     end
 end
 
--- X-Button Click Event - Führt Cleanup aus und zerstört die GUI
+local function setupFollowPlayer()
+    if followPlayerEnabled and targetPlayer then
+        connections.followPlayer = RunService.Heartbeat:Connect(function()
+            local myCharacter = player.Character
+            local targetCharacter = targetPlayer.Character
+            
+            if myCharacter and targetCharacter and 
+               myCharacter:FindFirstChild("HumanoidRootPart") and 
+               targetCharacter:FindFirstChild("HumanoidRootPart") then
+                
+                local targetPosition = targetCharacter.HumanoidRootPart.Position
+                local targetLookDirection = targetCharacter.HumanoidRootPart.CFrame.LookVector
+                local behindPosition = targetPosition - (targetLookDirection * 2)
+                
+                myCharacter.HumanoidRootPart.CFrame = CFrame.new(behindPosition, targetPosition)
+            end
+        end)
+        followPlayerStatus.Text = "Status: Following " .. targetPlayer.Name
+    else
+        if connections.followPlayer then
+            connections.followPlayer:Disconnect()
+            connections.followPlayer = nil
+        end
+        followPlayerStatus.Text = "Status: OFF"
+    end
+end
+
+local function findPlayerByName(name)
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Name:lower():sub(1, #name) == name:lower() and p ~= player then
+            return p
+        end
+    end
+    return nil
+end
+
+redLightButton.MouseButton1Click:Connect(function()
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        character.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(-49.88, 1023.10, 83.59))
+        print("Teleported to RedLight GreenLight area")
+    end
+end)
+
+infJumpToggle.MouseButton1Click:Connect(function()
+    infJumpEnabled = not infJumpEnabled
+    updateToggleAppearance(infJumpToggle, infJumpEnabled)
+    setupInfJump()
+    print("Inf Jump:", infJumpEnabled)
+end)
+
+noclipToggle.MouseButton1Click:Connect(function()
+    noclipEnabled = not noclipEnabled
+    updateToggleAppearance(noclipToggle, noclipEnabled)
+    setupNoclip()
+    print("Noclip:", noclipEnabled)
+end)
+
+followPlayerToggle.MouseButton1Click:Connect(function()
+    followPlayerEnabled = not followPlayerEnabled
+    updateToggleAppearance(followPlayerToggle, followPlayerEnabled)
+    
+    if followPlayerEnabled then
+        local inputName = followPlayerInput.Text
+        if inputName and inputName ~= "Player Name" and inputName ~= "" then
+            targetPlayer = findPlayerByName(inputName)
+            if not targetPlayer then
+                followPlayerEnabled = false
+                updateToggleAppearance(followPlayerToggle, false)
+                followPlayerStatus.Text = "Status: Player not found"
+                return
+            end
+        else
+            followPlayerEnabled = false
+            updateToggleAppearance(followPlayerToggle, false)
+            followPlayerStatus.Text = "Status: Enter player name"
+            return
+        end
+    else
+        targetPlayer = nil
+    end
+    
+    setupFollowPlayer()
+    print("Follow Player:", followPlayerEnabled)
+end)
+
+local dragging = false
+local startPos = walkSpeedKnob.Position
+
+walkSpeedKnob.MouseButton1Down:Connect(function()
+    dragging = true
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mousePos = UserInputService:GetMouseLocation()
+        local sliderPos = walkSpeedSlider.AbsolutePosition
+        local sliderSize = walkSpeedSlider.AbsoluteSize
+        
+        local relativeX = mousePos.X - sliderPos.X
+        local clampedX = math.max(0, math.min(relativeX, sliderSize.X))
+        local percentage = clampedX / sliderSize.X
+        
+        walkSpeedKnob.Position = UDim2.new(percentage, -10, 0, 0)
+        
+        currentWalkSpeed = math.floor(16 + (percentage * 84))
+        walkSpeedValue.Text = tostring(currentWalkSpeed)
+        
+        print("Walk Speed:", currentWalkSpeed)
+    end
+end)
+
 closeButton.MouseButton1Click:Connect(function()
-    cleanupAll()                 
-    screenGui:Destroy()          
-end)
-
--- Hover-Effekte für den X-Button
-closeButton.MouseEnter:Connect(function()
-    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(240, 73, 89)})
-    tween:Play()
-end)
-
-closeButton.MouseLeave:Connect(function()
-    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 53, 69)})
-    tween:Play()
-end)
-
--- Close Button Funktionalität
-closeButton.MouseButton1Click:Connect(function()
-    cleanupAll()
+    for _, connection in pairs(connections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    
+    if noclipEnabled then
+        local character = player.Character
+        if character then
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+    
     screenGui:Destroy()
 end)
 
--- Minimize Funktionalität
-minimizeButton.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    local targetSize = isMinimized and minimizedSize or originalSize
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(mainFrame, tweenInfo, {Size = targetSize})
-    
-    minimizeButton.Text = isMinimized and "+" or "-"
-    tween:Play()
-end)
-
--- Hover-Effekte für Close Button
 closeButton.MouseEnter:Connect(function()
-    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(240, 73, 89)})
-    tween:Play()
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 70, 90)
 end)
 
 closeButton.MouseLeave:Connect(function()
-    local tween = TweenService:Create(closeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 53, 69)})
-    tween:Play()
+    closeButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
 end)
 
--- Container für Buttons
-local buttonContainer = Instance.new("Frame")
-buttonContainer.Name = "ButtonContainer"
-buttonContainer.Size = UDim2.new(1, -20, 1, -70)
-buttonContainer.Position = UDim2.new(0, 10, 0, 60)
-buttonContainer.BackgroundTransparency = 1
-buttonContainer.Parent = mainFrame
-
--- Infinite Jump Funktionalität
-local function enableInfiniteJump()
-    if infJumpConnection then
-        infJumpConnection:Disconnect()
-    end
-    
-    infJumpConnection = UserInputService.JumpRequest:Connect(function()
-        if character and character:FindFirstChild("Humanoid") then
-            character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end)
-end
-
-local function disableInfiniteJump()
-    if infJumpConnection then
-        infJumpConnection:Disconnect()
-        infJumpConnection = nil
-    end
-end
-
--- Optimierte Tug of War Funktion
-local function enableTugOfWar()
-    if tugOfWarConnection then
-        tugOfWarConnection:Disconnect()
-    end
-    
-    tugOfWarConnection = RunService.Heartbeat:Connect(function()
-        local currentTime = tick()
-        
-        if currentTime - tugOfWarLastCheck < tugOfWarCheckInterval then
-            return
-        end
-        tugOfWarLastCheck = currentTime
-        
-        local playerGui = player:FindFirstChild("PlayerGui")
-        if not playerGui then return end
-        
-        local skillCheckGuis = {
-            playerGui:FindFirstChild("SkillCheck"),
-            playerGui:FindFirstChild("Skillcheck"),
-            playerGui:FindFirstChild("skillcheck"),
-            playerGui:FindFirstChild("SkillcheckGUI"),
-            playerGui:FindFirstChild("TugOfWar")
-        }
-        
-        for _, skillCheckGui in pairs(skillCheckGuis) do
-            if skillCheckGui then
-                local frame = skillCheckGui:FindFirstChildOfClass("Frame")
-                if frame then
-                    local pointer = frame:FindFirstChild("Pointer") or frame:FindFirstChild("pointer")
-                    local successZone = frame:FindFirstChild("SuccessZone") or 
-                                      frame:FindFirstChild("successzone") or
-                                      frame:FindFirstChild("Success") or
-                                      frame:FindFirstChild("GreenZone")
-                    
-                    if pointer and successZone then
-                        local pointerPos = pointer.AbsolutePosition
-                        local successPos = successZone.AbsolutePosition
-                        local successSize = successZone.AbsoluteSize
-                        
-                        if pointerPos.X >= successPos.X and pointerPos.X <= successPos.X + successSize.X and
-                           pointerPos.Y >= successPos.Y and pointerPos.Y <= successPos.Y + successSize.Y then
-                            
-                            game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                            task.wait(0.05)
-                            game:GetService("VirtualInputManager"):SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                            
-                            tugOfWarLastCheck = currentTime + 0.5
-                        end
-                    end
-                end
-                break
-            end
-        end
-    end)
-end
-
-local function disableTugOfWar()
-    if tugOfWarConnection then
-        tugOfWarConnection:Disconnect()
-        tugOfWarConnection = nil
-    end
-end
-
--- Optimierte Glass Vision Funktionen
-local function findGlassObjects()
-    glassObjects = {}
-    
-    -- Verwende spawn() um die Suche async zu machen
-    spawn(function()
-        local objectsToCheck = {}
-        
-        -- Sammle alle relevanten Objekte
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                local name = obj.Name:lower()
-                if name:find("glass") or obj.Material == Enum.Material.Glass or 
-                   name:find("window") or obj.Transparency > 0.3 then
-                    table.insert(objectsToCheck, obj)
-                end
-            end
-        end
-        
-        -- Verarbeite Objekte in kleinen Batches
-        for i = 1, #objectsToCheck do
-            local obj = objectsToCheck[i]
-            if obj and obj.Parent then
-                local isBreakable = false
-                
-                -- Schnelle Überprüfung für zerbrechliches Glas
-                if obj.CanCollide == false or obj.Transparency > 0.5 or
-                   obj:GetAttribute("Breakable") == true or
-                   obj.Name:lower():find("fake") or obj.Name:lower():find("break") then
-                    isBreakable = true
-                end
-                
-                glassObjects[obj] = isBreakable
-            end
-            
-            -- Yield alle 10 Objekte um Lag zu vermeiden
-            if i % 10 == 0 then
-                task.wait()
-            end
-        end
-    end)
-end
-
-local function createGlassEffect(obj, isBreakable)
-    local effect = Instance.new("SelectionBox")
-    effect.Name = "GlassVisionEffect"
-    effect.Adornee = obj
-    effect.LineThickness = 0.2
-    effect.Transparency = 0.3
-    effect.Color3 = isBreakable and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
-    effect.Parent = obj
-    
-    glassEffects[obj] = effect
-    return effect
-end
-
-local function enableGlassVision()
-    print("Glass Vision wird aktiviert...")
-    
-    -- Finde Glass Objekte einmalig
-    findGlassObjects()
-    
-    -- Erstelle Effekte für bekannte Objekte
-    spawn(function()
-        task.wait(1) -- Warte bis findGlassObjects() fertig ist
-        
-        for obj, isBreakable in pairs(glassObjects) do
-            if obj and obj.Parent and not glassEffects[obj] then
-                createGlassEffect(obj, isBreakable)
-            end
-        end
-    end)
-    
-    -- Minimaler Update-Loop nur für neue Objekte
-    glassVisionConnection = RunService.Heartbeat:Connect(function()
-        local currentTime = tick()
-        
-        if currentTime - glassVisionLastCheck < glassVisionCheckInterval then
-            return
-        end
-        glassVisionLastCheck = currentTime
-        
-        -- Überprüfe nur neue Objekte
-        spawn(function()
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and not glassObjects[obj] then
-                    local name = obj.Name:lower()
-                    if name:find("glass") or obj.Material == Enum.Material.Glass then
-                        local isBreakable = obj.CanCollide == false or obj.Transparency > 0.5
-                        glassObjects[obj] = isBreakable
-                        
-                        if not glassEffects[obj] then
-                            createGlassEffect(obj, isBreakable)
-                        end
-                    end
-                end
-            end
-        end)
-    end)
-end
-
-local function disableGlassVision()
-    print("Glass Vision wird deaktiviert...")
-    
-    if glassVisionConnection then
-        glassVisionConnection:Disconnect()
-        glassVisionConnection = nil
-    end
-    
-    -- Entferne alle Effekte
-    for obj, effect in pairs(glassEffects) do
-        if effect and effect.Parent then
-            effect:Destroy()
-        end
-    end
-    
-    -- Leere Caches
-    glassObjects = {}
-    glassEffects = {}
-end
-
--- Button-Funktionen
-local function createButton(name, text, position, hasCheckbox)
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Size = UDim2.new(1, 0, 0, 40)
-    button.Position = position
-    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    button.BorderSizePixel = 0
-    button.Text = text
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextScaled = true
-    button.Font = Enum.Font.SourceSans
-    button.TextXAlignment = Enum.TextXAlignment.Left
-    button.Parent = buttonContainer
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 4)
-    buttonCorner.Parent = button
-    
-    local textPadding = Instance.new("UIPadding")
-    textPadding.PaddingLeft = UDim.new(0, 10)
-    textPadding.Parent = button
-    
-    if hasCheckbox then
-        local checkbox = Instance.new("Frame")
-        checkbox.Name = "Checkbox"
-        checkbox.Size = UDim2.new(0, 20, 0, 20)
-        checkbox.Position = UDim2.new(1, -30, 0.5, -10)
-        checkbox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        checkbox.BorderSizePixel = 1
-        checkbox.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        checkbox.Parent = button
-        
-        local checkboxCorner = Instance.new("UICorner")
-        checkboxCorner.CornerRadius = UDim.new(0, 2)
-        checkboxCorner.Parent = checkbox
-        
-        local isChecked = false
-        
-        button.MouseButton1Click:Connect(function()
-            isChecked = not isChecked
-            checkbox.BackgroundColor3 = isChecked and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(70, 70, 70)
-            
-            if name == "Noclip" then
-                noclipEnabled = isChecked
-                if noclipEnabled then
-                    noclipConnection = RunService.Stepped:Connect(function()
-                        if character and character.Parent then
-                            for _, part in pairs(character:GetChildren()) do
-                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                    part.CanCollide = false
-                                end
-                            end
-                        end
-                    end)
-                else
-                    if noclipConnection then
-                        noclipConnection:Disconnect()
-                        noclipConnection = nil
-                    end
-                    if character and character.Parent then
-                        for _, part in pairs(character:GetChildren()) do
-                            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                part.CanCollide = true
-                            end
-                        end
-                    end
-                end
-            elseif name == "TugOfWar" then
-                tugOfWarEnabled = isChecked
-                if tugOfWarEnabled then
-                    enableTugOfWar()
-                else
-                    disableTugOfWar()
-                end
-            elseif name == "InfJump" then
-                infJumpEnabled = isChecked
-                if infJumpEnabled then
-                    enableInfiniteJump()
-                else
-                    disableInfiniteJump()
-                end
-            end
-        end)
-    end
-    
-    button.MouseEnter:Connect(function()
-        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
-        tween:Play()
-    end)
-    
-    button.MouseLeave:Connect(function()
-        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
-        tween:Play()
-    end)
-    
-    return button
-end
-
--- Walk Speed Button mit Slider und kontinuierlichem Loop
-local function createWalkSpeedButton()
-    local button = Instance.new("Frame")
-    button.Name = "WalkSpeedButton"
-    button.Size = UDim2.new(1, 0, 0, 40)
-    button.Position = UDim2.new(0, 0, 0, 200)
-    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    button.BorderSizePixel = 0
-    button.Parent = buttonContainer
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 4)
-    buttonCorner.Parent = button
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.4, 0, 1, 0)
-    label.Position = UDim2.new(0, 0, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "Walk Speed"
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextScaled = true
-    label.Font = Enum.Font.SourceSans
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = button
-    
-    local labelPadding = Instance.new("UIPadding")
-    labelPadding.PaddingLeft = UDim.new(0, 10)
-    labelPadding.Parent = label
-    
-    local sliderContainer = Instance.new("Frame")
-    sliderContainer.Size = UDim2.new(0, 120, 0, 20)
-    sliderContainer.Position = UDim2.new(1, -130, 0.5, -10)
-    sliderContainer.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    sliderContainer.BorderSizePixel = 0
-    sliderContainer.Parent = button
-    
-    local sliderCorner = Instance.new("UICorner")
-    sliderCorner.CornerRadius = UDim.new(0, 10)
-    sliderCorner.Parent = sliderContainer
-    
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
-    sliderFill.Position = UDim2.new(0, 0, 0, 0)
-    sliderFill.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
-    sliderFill.BorderSizePixel = 0
-    sliderFill.Parent = sliderContainer
-    
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(0, 10)
-    fillCorner.Parent = sliderFill
-    
-    local sliderButton = Instance.new("Frame")
-    sliderButton.Size = UDim2.new(0, 16, 0, 16)
-    sliderButton.Position = UDim2.new(0.5, -8, 0.5, -8)
-    sliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sliderButton.BorderSizePixel = 0
-    sliderButton.Parent = sliderContainer
-    
-    local sliderButtonCorner = Instance.new("UICorner")
-    sliderButtonCorner.CornerRadius = UDim.new(0, 8)
-    sliderButtonCorner.Parent = sliderButton
-    
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.Size = UDim2.new(0, 30, 0, 20)
-    valueLabel.Position = UDim2.new(1, -25, 0.5, -10)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Text = "28"
-    valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    valueLabel.TextScaled = true
-    valueLabel.Font = Enum.Font.SourceSans
-    valueLabel.Parent = button
-    
-    local minValue = 16
-    local maxValue = 100
-    local currentValue = 28
-    local isDragging = false
-    
-    -- Variablen für kontinuierlichen Loop
-    local walkSpeedConnection = nil
-    local walkSpeedEnabled = false
-    
-    local function updateSlider(value)
-        currentValue = math.clamp(value, minValue, maxValue)
-        local percentage = (currentValue - minValue) / (maxValue - minValue)
-        
-        sliderFill.Size = UDim2.new(percentage, 0, 1, 0)
-        sliderButton.Position = UDim2.new(percentage, -8, 0.5, -8)
-        valueLabel.Text = tostring(math.floor(currentValue))
-        
-        -- Starte kontinuierlichen Loop wenn noch nicht aktiv
-        if not walkSpeedEnabled then
-            walkSpeedEnabled = true
-            walkSpeedConnection = RunService.Heartbeat:Connect(function()
-                if player.Character and player.Character:FindFirstChild("Humanoid") then
-                    local humanoid = player.Character.Humanoid
-                    if humanoid.WalkSpeed ~= currentValue then
-                        humanoid.WalkSpeed = currentValue
-                    end
-                end
-            end)
-        end
-    end
-    
-    sliderContainer.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragging = true
-            local connection
-            connection = UserInputService.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
-                    local relativeX = input.Position.X - sliderContainer.AbsolutePosition.X
-                    local percentage = math.clamp(relativeX / sliderContainer.AbsoluteSize.X, 0, 1)
-                    local newValue = minValue + (percentage * (maxValue - minValue))
-                    updateSlider(newValue)
-                end
-            end)
-            
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    isDragging = false
-                    connection:Disconnect()
-                end
-            end)
-        end
-    end)
-    
-    updateSlider(currentValue)
-    
-    -- Cleanup-Funktion für Walk Speed Loop
-    local function cleanupWalkSpeed()
-        if walkSpeedConnection then
-            walkSpeedConnection:Disconnect()
-            walkSpeedConnection = nil
-            walkSpeedEnabled = false
-        end
-    end
-    
-    return button, cleanupWalkSpeed
-end
-
--- Buttons erstellen
-local redLightButton = createButton("RedLightGreenLight", "RedLight GreenLight", UDim2.new(0, 0, 0, 0), false)
-local tugOfWarButton = createButton("TugOfWar", "Tug of War", UDim2.new(0, 0, 0, 50), true)
-local glassVisionButton = createButton("GlassVision", "Glass Vision", UDim2.new(0, 0, 0, 100), false)
-local infJumpButton = createButton("InfJump", "Inf Jump", UDim2.new(0, 0, 0, 150), true)
-local walkSpeedButton, walkSpeedCleanupFunc = createWalkSpeedButton()
-walkSpeedCleanup = walkSpeedCleanupFunc
-local noclipButton = createButton("Noclip", "Noclip", UDim2.new(0, 0, 0, 250), true)
-
--- Drag-Funktionalität
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-local function updateInput(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
-local function setupDrag(element)
-    element.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    element.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            if dragging then
-                updateInput(input)
-            end
-        end
-    end)
-end
-
-setupDrag(titleLabel)
-
--- Button Click Handler
-redLightButton.MouseButton1Click:Connect(function()
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        local targetCoord = redLightCoordinates[currentCoordIndex]
-        character.HumanoidRootPart.CFrame = CFrame.new(targetCoord)
-        
-        currentCoordIndex = currentCoordIndex + 1
-        if currentCoordIndex > #redLightCoordinates then
-            currentCoordIndex = 1
-        end
-        
-        print("Teleported to:", targetCoord)
+followPlayerInput.FocusLost:Connect(function()
+    if followPlayerInput.Text == "" then
+        followPlayerInput.Text = "Player Name"
     end
 end)
 
-glassVisionButton.MouseButton1Click:Connect(function()
-    glassVisionEnabled = not glassVisionEnabled
-    
-    if glassVisionEnabled then
-        enableGlassVision()
-    else
-        disableGlassVision()
+followPlayerInput.Focused:Connect(function()
+    if followPlayerInput.Text == "Player Name" then
+        followPlayerInput.Text = ""
     end
 end)
 
--- Character Respawn Handler
-player.CharacterAdded:Connect(function(newCharacter)
-    character = newCharacter
-    humanoid = character:WaitForChild("Humanoid")
-    rootPart = character:WaitForChild("HumanoidRootPart")
-    originalJumpPower = humanoid.JumpPower
+setupWalkSpeed()
+
+player.CharacterAdded:Connect(function(character)
+    wait(1)
+    
+    setupWalkSpeed()
     
     if infJumpEnabled then
-        enableInfiniteJump()
+        setupInfJump()
     end
     
-    if tugOfWarEnabled then
-        enableTugOfWar()
+    if noclipEnabled then
+        setupNoclip()
     end
     
-    if glassVisionEnabled then
-        -- Deaktiviere und aktiviere Glass Vision neu nach Respawn
-        disableGlassVision()
-        task.wait(1)
-        enableGlassVision()
-    end
-    
-    -- Walk Speed wird automatisch durch den Loop gesetzt
-    -- Keine manuelle Setzung nötig
-    
-    currentCoordIndex = 1
-end)
-
--- Cleanup bei GUI Zerstörung
-screenGui.AncestryChanged:Connect(function()
-    if not screenGui.Parent then
-        cleanupAll()
+    if followPlayerEnabled then
+        setupFollowPlayer()
     end
 end)
-
--- GUI Toggle über Taste "H" (nur sichtbar/unsichtbar, Funktionen bleiben an)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.H then
-        if screenGui and screenGui.Parent then
-            guiVisible = not guiVisible
-            screenGui.Enabled = guiVisible
-        end
-    end
-end)
-
-
-print("Optimized Ink Game GUI loaded mit Close Button - Alle Lag-Probleme behoben! Walk Speed Loop aktiviert!")
