@@ -12,7 +12,7 @@ screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 250, 0, 400)
+mainFrame.Size = UDim2.new(0, 250, 0, 440)
 mainFrame.Position = UDim2.new(0, 50, 0, 50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
@@ -103,10 +103,42 @@ local redLightButtonCorner = Instance.new("UICorner")
 redLightButtonCorner.CornerRadius = UDim.new(0, 10)
 redLightButtonCorner.Parent = redLightButton
 
+local teleportFrame = Instance.new("Frame")
+teleportFrame.Name = "TeleportFrame"
+teleportFrame.Size = UDim2.new(1, 0, 0, 30)
+teleportFrame.Position = UDim2.new(0, 0, 0, 40)
+teleportFrame.BackgroundTransparency = 1
+teleportFrame.Parent = contentFrame
+
+local teleportLabel = Instance.new("TextLabel")
+teleportLabel.Name = "TeleportLabel"
+teleportLabel.Size = UDim2.new(1, -50, 1, 0)
+teleportLabel.Position = UDim2.new(0, 0, 0, 0)
+teleportLabel.BackgroundTransparency = 1
+teleportLabel.Text = "Finish Glass Game"
+teleportLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+teleportLabel.TextScaled = true
+teleportLabel.Font = Enum.Font.Gotham
+teleportLabel.TextXAlignment = Enum.TextXAlignment.Left
+teleportLabel.Parent = teleportFrame
+
+local teleportButton = Instance.new("TextButton")
+teleportButton.Name = "TeleportButton"
+teleportButton.Size = UDim2.new(0, 40, 0, 20)
+teleportButton.Position = UDim2.new(1, -40, 0, 5)
+teleportButton.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+teleportButton.BorderSizePixel = 0
+teleportButton.Text = ""
+teleportButton.Parent = teleportFrame
+
+local teleportButtonCorner = Instance.new("UICorner")
+teleportButtonCorner.CornerRadius = UDim.new(0, 10)
+teleportButtonCorner.Parent = teleportButton
+
 local infJumpFrame = Instance.new("Frame")
 infJumpFrame.Name = "InfJumpFrame"
 infJumpFrame.Size = UDim2.new(1, 0, 0, 30)
-infJumpFrame.Position = UDim2.new(0, 0, 0, 40)
+infJumpFrame.Position = UDim2.new(0, 0, 0, 80)
 infJumpFrame.BackgroundTransparency = 1
 infJumpFrame.Parent = contentFrame
 
@@ -138,7 +170,7 @@ infJumpToggleCorner.Parent = infJumpToggle
 local walkSpeedFrame = Instance.new("Frame")
 walkSpeedFrame.Name = "WalkSpeedFrame"
 walkSpeedFrame.Size = UDim2.new(1, 0, 0, 50)
-walkSpeedFrame.Position = UDim2.new(0, 0, 0, 80)
+walkSpeedFrame.Position = UDim2.new(0, 0, 0, 120)
 walkSpeedFrame.BackgroundTransparency = 1
 walkSpeedFrame.Parent = contentFrame
 
@@ -194,7 +226,7 @@ walkSpeedValue.Parent = walkSpeedFrame
 local noclipFrame = Instance.new("Frame")
 noclipFrame.Name = "NoclipFrame"
 noclipFrame.Size = UDim2.new(1, 0, 0, 30)
-noclipFrame.Position = UDim2.new(0, 0, 0, 140)
+noclipFrame.Position = UDim2.new(0, 0, 0, 180)
 noclipFrame.BackgroundTransparency = 1
 noclipFrame.Parent = contentFrame
 
@@ -226,7 +258,7 @@ noclipToggleCorner.Parent = noclipToggle
 local followPlayerFrame = Instance.new("Frame")
 followPlayerFrame.Name = "FollowPlayerFrame"
 followPlayerFrame.Size = UDim2.new(1, 0, 0, 70)
-followPlayerFrame.Position = UDim2.new(0, 0, 0, 180)
+followPlayerFrame.Position = UDim2.new(0, 0, 0, 220)
 followPlayerFrame.BackgroundTransparency = 1
 followPlayerFrame.Parent = contentFrame
 
@@ -329,15 +361,116 @@ local function setupWalkSpeed()
     end)
 end
 
+-- Verbesserte Noclip-Funktion
 local function setupNoclip()
     if noclipEnabled then
         connections.noclip = RunService.Stepped:Connect(function()
             local character = player.Character
             if character then
+                -- Alle Teile des Charakters durchgehen
                 for _, part in pairs(character:GetChildren()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    if part:IsA("BasePart") then
                         part.CanCollide = false
                     end
+                end
+                
+                -- Auch Accessories behandeln
+                for _, accessory in pairs(character:GetChildren()) do
+                    if accessory:IsA("Accessory") then
+                        local handle = accessory:FindFirstChild("Handle")
+                        if handle then
+                            handle.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        if connections.noclip then
+            connections.noclip:Disconnect()
+            connections.noclip = nil
+        end
+        
+        -- Collision wieder aktivieren
+        local character = player.Character
+        if character then
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    -- HumanoidRootPart soll normalerweise CanCollide = false haben
+                    if part.Name == "HumanoidRootPart" then
+                        part.CanCollide = false
+                    else
+                        part.CanCollide = true
+                    end
+                end
+            end
+            
+            -- Accessories wieder aktivieren
+            for _, accessory in pairs(character:GetChildren()) do
+                if accessory:IsA("Accessory") then
+                    local handle = accessory:FindFirstChild("Handle")
+                    if handle then
+                        handle.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Alternative Noclip-Methode (falls die obere nicht funktioniert)
+local function setupNoclipAdvanced()
+    if noclipEnabled then
+        connections.noclip = RunService.Stepped:Connect(function()
+            local character = player.Character
+            if character then
+                -- Alle Descendants durchgehen (auch verschachtelte Teile)
+                for _, descendant in pairs(character:GetDescendants()) do
+                    if descendant:IsA("BasePart") then
+                        descendant.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        if connections.noclip then
+            connections.noclip:Disconnect()
+            connections.noclip = nil
+        end
+        
+        -- Collision wieder aktivieren
+        local character = player.Character
+        if character then
+            for _, descendant in pairs(character:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    if descendant.Name == "HumanoidRootPart" then
+                        descendant.CanCollide = false -- HumanoidRootPart sollte immer false sein
+                    else
+                        descendant.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Noch eine Alternative mit Raycast-Ignore
+local function setupNoclipWithRaycast()
+    if noclipEnabled then
+        connections.noclip = RunService.Stepped:Connect(function()
+            local character = player.Character
+            if character then
+                -- Normale Noclip-Methode
+                for _, descendant in pairs(character:GetDescendants()) do
+                    if descendant:IsA("BasePart") then
+                        descendant.CanCollide = false
+                    end
+                end
+                
+                -- Zusätzlich: Humanoid-States manipulieren
+                local humanoid = character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
                 end
             end
         end)
@@ -349,10 +482,20 @@ local function setupNoclip()
         
         local character = player.Character
         if character then
-            for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CanCollide = true
+            for _, descendant in pairs(character:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    if descendant.Name == "HumanoidRootPart" then
+                        descendant.CanCollide = false
+                    else
+                        descendant.CanCollide = true
+                    end
                 end
+            end
+            
+            -- Humanoid-State zurücksetzen
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
             end
         end
     end
@@ -399,6 +542,14 @@ redLightButton.MouseButton1Click:Connect(function()
     if character and character:FindFirstChild("HumanoidRootPart") then
         character.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(-49.88, 1023.10, 83.59))
         print("Teleported to RedLight GreenLight area")
+    end
+end)
+
+teleportButton.MouseButton1Click:Connect(function()
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        character.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(-215.15, 520.73, -1534.37))
+        print("Teleported to custom location")
     end
 end)
 
