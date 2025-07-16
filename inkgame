@@ -473,17 +473,47 @@ end
 local function addESPToPlayer(targetPlayer)
     if not targetPlayer or not targetPlayer.Character then return end
     
-    for _, part in pairs(targetPlayer.Character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+    -- Get all BaseParts in the character (works for both R6 and R15)
+    for _, part in pairs(targetPlayer.Character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Parent == targetPlayer.Character then
+            -- Skip if it already has ESP
+            if part:FindFirstChild("ESP_Highlight") then continue end
+            
             local highlight = Instance.new("Highlight")
             highlight.Name = "ESP_Highlight"
             highlight.Adornee = part
-            highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            highlight.FillColor = Color3.fromRGB(255, 100, 100)
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillTransparency = 0.5
+            highlight.FillTransparency = 0.3
             highlight.OutlineTransparency = 0
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             highlight.Parent = part
+            
+            table.insert(espHighlights, highlight)
+        end
+    end
+    
+    -- For R15 characters, also highlight body parts that might be deeper
+    for _, descendant in pairs(targetPlayer.Character:GetDescendants()) do
+        if descendant:IsA("BasePart") and 
+           descendant.Name ~= "HumanoidRootPart" and
+           not descendant:FindFirstChild("ESP_Highlight") and
+           (descendant.Name:find("Torso") or 
+            descendant.Name:find("Head") or 
+            descendant.Name:find("Arm") or 
+            descendant.Name:find("Leg") or
+            descendant.Name:find("Foot") or
+            descendant.Name:find("Hand")) then
+            
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "ESP_Highlight"
+            highlight.Adornee = descendant
+            highlight.FillColor = Color3.fromRGB(255, 100, 100)
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.FillTransparency = 0.3
+            highlight.OutlineTransparency = 0
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.Parent = descendant
             
             table.insert(espHighlights, highlight)
         end
@@ -811,10 +841,17 @@ end)
 -- Player events
 Players.PlayerAdded:Connect(function(newPlayer)
     if espEnabled then
-        newPlayer.CharacterAdded:Connect(function()
-            wait(1)
+        newPlayer.CharacterAdded:Connect(function(character)
+            -- Wait a bit longer for R15 characters to fully load
+            wait(2)
             addESPToPlayer(newPlayer)
         end)
+        
+        -- If character already exists, add ESP immediately
+        if newPlayer.Character then
+            wait(2)
+            addESPToPlayer(newPlayer)
+        end
     end
 end)
 
@@ -846,17 +883,36 @@ player.CharacterAdded:Connect(function(character)
     if followPlayerEnabled then
         setupFollowPlayer()
     end
+    
+    -- Re-add ESP to all players when local player respawns
+    if espEnabled then
+        wait(1)
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                addESPToPlayer(p)
+            end
+        end
+    end
 end)
 
--- Handle character respawns for ESP
+-- Handle character respawns for ESP (improved for R15)
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= player then
-        p.CharacterAdded:Connect(function()
+        p.CharacterAdded:Connect(function(character)
             if espEnabled then
-                wait(1)
+                -- Wait longer for R15 body parts to load properly
+                wait(2)
                 addESPToPlayer(p)
             end
         end)
+        
+        -- Add ESP to existing characters
+        if p.Character and espEnabled then
+            spawn(function()
+                wait(2)
+                addESPToPlayer(p)
+            end)
+        end
     end
 end
 
