@@ -6,7 +6,6 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Modern Color Scheme
 local colors = {
     bg = Color3.fromRGB(18, 18, 23),
     surface = Color3.fromRGB(30, 30, 40),
@@ -37,13 +36,11 @@ local gameState = {
     connections = {}
 }
 
--- Create main GUI container
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ModernINKGameGUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Main window
 local mainWindow = Instance.new("Frame")
 mainWindow.Name = "MainWindow"
 mainWindow.Size = UDim2.new(0, 450, 0, 650)
@@ -53,19 +50,16 @@ mainWindow.BorderSizePixel = 0
 mainWindow.Active = true
 mainWindow.Parent = screenGui
 
--- Window border glow
 local windowBorder = Instance.new("UIStroke")
 windowBorder.Color = colors.primary
 windowBorder.Thickness = 2
 windowBorder.Transparency = 0.3
 windowBorder.Parent = mainWindow
 
--- Window corner radius
 local windowCorner = Instance.new("UICorner")
 windowCorner.CornerRadius = UDim.new(0, 16)
 windowCorner.Parent = mainWindow
 
--- Drop shadow
 local shadowFrame = Instance.new("Frame")
 shadowFrame.Name = "Shadow"
 shadowFrame.Size = UDim2.new(1, 30, 1, 30)
@@ -79,7 +73,6 @@ local shadowCorner = Instance.new("UICorner")
 shadowCorner.CornerRadius = UDim.new(0, 20)
 shadowCorner.Parent = shadowFrame
 
--- Header section
 local header = Instance.new("Frame")
 header.Name = "Header"
 header.Size = UDim2.new(1, 0, 0, 70)
@@ -91,7 +84,6 @@ local headerCorner = Instance.new("UICorner")
 headerCorner.CornerRadius = UDim.new(0, 16)
 headerCorner.Parent = header
 
--- Header gradient overlay
 local headerGradient = Instance.new("Frame")
 headerGradient.Size = UDim2.new(1, 0, 1, 0)
 headerGradient.BackgroundColor3 = colors.primary
@@ -111,7 +103,6 @@ headerGradientEffect.Color = ColorSequence.new{
 headerGradientEffect.Rotation = 45
 headerGradientEffect.Parent = headerGradient
 
--- Title
 local titleIcon = Instance.new("TextLabel")
 titleIcon.Size = UDim2.new(0, 40, 0, 40)
 titleIcon.Position = UDim2.new(0, 20, 0, 15)
@@ -137,14 +128,13 @@ local subtitle = Instance.new("TextLabel")
 subtitle.Size = UDim2.new(1, -180, 0, 20)
 subtitle.Position = UDim2.new(0, 70, 0, 40)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Advanced Game Utilities • " .. settings.toggleKey.Name .. " to toggle"
+subtitle.Text = "Made by massivendurchfall + jasonstinkthardnachkacke • " .. settings.toggleKey.Name .. " to toggle"
 subtitle.TextColor3 = colors.textSecondary
 subtitle.Font = Enum.Font.Gotham
 subtitle.TextSize = 11
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
 subtitle.Parent = header
 
--- Header buttons
 local headerButtons = Instance.new("Frame")
 headerButtons.Size = UDim2.new(0, 100, 0, 40)
 headerButtons.Position = UDim2.new(1, -110, 0, 15)
@@ -158,7 +148,6 @@ headerButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 headerButtonLayout.Padding = UDim.new(0, 8)
 headerButtonLayout.Parent = headerButtons
 
--- Settings button
 local settingsBtn = Instance.new("TextButton")
 settingsBtn.Size = UDim2.new(0, 36, 0, 36)
 settingsBtn.BackgroundColor3 = colors.surface
@@ -173,7 +162,6 @@ local settingsBtnCorner = Instance.new("UICorner")
 settingsBtnCorner.CornerRadius = UDim.new(0, 8)
 settingsBtnCorner.Parent = settingsBtn
 
--- Close button
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 36, 0, 36)
 closeBtn.BackgroundColor3 = colors.danger
@@ -188,7 +176,6 @@ local closeBtnCorner = Instance.new("UICorner")
 closeBtnCorner.CornerRadius = UDim.new(0, 8)
 closeBtnCorner.Parent = closeBtn
 
--- Content container
 local content = Instance.new("ScrollingFrame")
 content.Name = "Content"
 content.Size = UDim2.new(1, -40, 1, -90)
@@ -206,7 +193,6 @@ contentLayout.Padding = UDim.new(0, 20)
 contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 contentLayout.Parent = content
 
--- Helper functions
 local function createSection(name, height)
     local section = Instance.new("Frame")
     section.Name = name
@@ -404,13 +390,45 @@ local function createDropdown(parent, position, size, placeholder)
     dropdownBtn.MouseButton1Click:Connect(function()
         optionsFrame.Visible = not optionsFrame.Visible
         dropdownBtn.Visible = not optionsFrame.Visible
-        if optionsFrame.Visible then updateOptions() end
+        if optionsFrame.Visible then 
+            updateOptions()
+        end
     end)
     
-    return dropdownFrame, selectedLabel, updateOptions
+    return dropdownFrame, selectedLabel, function() 
+        updateOptions()
+        if optionsFrame.Visible then
+            updateOptions()
+        end
+    end
 end
 
--- Player Chams Section
+local function updateChamsForAllPlayers()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            for _, part in pairs(p.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    if gameState.chams then
+                        if not part:FindFirstChild("PlayerCham") then
+                            local highlight = Instance.new("Highlight")
+                            highlight.Name = "PlayerCham"
+                            highlight.Adornee = part
+                            highlight.FillColor = colors.accent
+                            highlight.OutlineColor = colors.text
+                            highlight.FillTransparency = 0.3
+                            highlight.OutlineTransparency = 0
+                            highlight.Parent = part
+                        end
+                    else
+                        local highlight = part:FindFirstChild("PlayerCham")
+                        if highlight then highlight:Destroy() end
+                    end
+                end
+            end
+        end
+    end
+end
+
 local chamsSection = createSection("ChamsSection", 80)
 
 local chamsTitle = Instance.new("TextLabel")
@@ -436,38 +454,9 @@ chamsDesc.Parent = chamsSection
 
 local chamsToggle, setChamsToggle = createToggle(chamsSection, UDim2.new(1, -54, 0, 16), false, function(enabled)
     gameState.chams = enabled
-    if enabled then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Character then
-                for _, part in pairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        local highlight = Instance.new("Highlight")
-                        highlight.Name = "PlayerCham"
-                        highlight.Adornee = part
-                        highlight.FillColor = colors.accent
-                        highlight.OutlineColor = colors.text
-                        highlight.FillTransparency = 0.3
-                        highlight.OutlineTransparency = 0
-                        highlight.Parent = part
-                    end
-                end
-            end
-        end
-    else
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character then
-                for _, part in pairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local highlight = part:FindFirstChild("PlayerCham")
-                        if highlight then highlight:Destroy() end
-                    end
-                end
-            end
-        end
-    end
+    updateChamsForAllPlayers()
 end)
 
--- Movement Section
 local movementSection = createSection("MovementSection", 200)
 
 local movementTitle = Instance.new("TextLabel")
@@ -480,7 +469,6 @@ movementTitle.TextSize = 16
 movementTitle.TextXAlignment = Enum.TextXAlignment.Left
 movementTitle.Parent = movementSection
 
--- Infinite Jump
 local infJumpLabel = Instance.new("TextLabel")
 infJumpLabel.Size = UDim2.new(1, -60, 0, 20)
 infJumpLabel.Position = UDim2.new(0, 0, 0, 40)
@@ -508,7 +496,6 @@ local infJumpToggle, setInfJumpToggle = createToggle(movementSection, UDim2.new(
     end
 end)
 
--- Noclip
 local noclipLabel = Instance.new("TextLabel")
 noclipLabel.Size = UDim2.new(1, -60, 0, 20)
 noclipLabel.Position = UDim2.new(0, 0, 0, 75)
@@ -547,7 +534,6 @@ local noclipToggle, setNoclipToggle = createToggle(movementSection, UDim2.new(1,
     end
 end)
 
--- Walk Speed
 local walkSpeedLabel = Instance.new("TextLabel")
 walkSpeedLabel.Size = UDim2.new(1, 0, 0, 20)
 walkSpeedLabel.Position = UDim2.new(0, 0, 0, 110)
@@ -582,7 +568,6 @@ local knobCorner = Instance.new("UICorner")
 knobCorner.CornerRadius = UDim.new(0, 15)
 knobCorner.Parent = walkSpeedKnob
 
--- Slider functionality
 local dragging = false
 walkSpeedKnob.MouseButton1Down:Connect(function() dragging = true end)
 UserInputService.InputEnded:Connect(function(input)
@@ -605,7 +590,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Follow Player Section
 local followSection = createSection("FollowSection", 120)
 
 local followTitle = Instance.new("TextLabel")
@@ -648,7 +632,6 @@ local followToggle, setFollowToggle = createToggle(followSection, UDim2.new(1, -
     end
 end)
 
--- Teleports Section
 local teleportsSection = createSection("TeleportsSection", 120)
 
 local teleportsTitle = Instance.new("TextLabel")
@@ -672,7 +655,6 @@ teleportLayout.CellSize = UDim2.new(0, 190, 0, 40)
 teleportLayout.CellPadding = UDim2.new(0, 10, 0, 10)
 teleportLayout.Parent = teleportButtonsFrame
 
--- Teleport buttons
 local function createTeleportButton(text, color, position)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 190, 0, 40)
@@ -731,7 +713,6 @@ glassGameBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Settings Modal
 local settingsModal = Instance.new("Frame")
 settingsModal.Name = "SettingsModal"
 settingsModal.Size = UDim2.new(0, 400, 0, 250)
@@ -752,7 +733,6 @@ modalBorder.Thickness = 2
 modalBorder.Transparency = 0.3
 modalBorder.Parent = settingsModal
 
--- Modal backdrop
 local modalBackdrop = Instance.new("Frame")
 modalBackdrop.Size = UDim2.new(1, 0, 1, 0)
 modalBackdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -870,7 +850,7 @@ createModalButton("Save", colors.success, function()
     local key = Enum.KeyCode[keyName]
     if key then
         settings.toggleKey = key
-        subtitle.Text = "Advanced Game Utilities • " .. settings.toggleKey.Name .. " to toggle"
+        subtitle.Text = "Made by massivendurchfall + jasonstinkthardnachkacke • " .. settings.toggleKey.Name .. " to toggle"
         settingsModal.Visible = false
         modalBackdrop.Visible = false
     else
@@ -880,28 +860,35 @@ createModalButton("Save", colors.success, function()
     end
 end)
 
--- Event Connections
 settingsBtn.MouseButton1Click:Connect(function()
     settingsModal.Visible = true
     modalBackdrop.Visible = true
 end)
 
 closeBtn.MouseButton1Click:Connect(function()
-    -- Cleanup all connections
+    if gameState.connections.dropdownMonitor then
+        task.cancel(gameState.connections.dropdownMonitor)
+    end
+    
     for _, connection in pairs(gameState.connections) do
         if connection then connection:Disconnect() end
     end
     
-    -- Remove chams
-    if gameState.chams then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character then
-                for _, part in pairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local highlight = part:FindFirstChild("PlayerCham")
-                        if highlight then highlight:Destroy() end
-                    end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character then
+            for _, part in pairs(p.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    local highlight = part:FindFirstChild("PlayerCham")
+                    if highlight then highlight:Destroy() end
                 end
+            end
+        end
+    end
+    
+    if gameState.noclip and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
             end
         end
     end
@@ -909,14 +896,35 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Hotkey toggle
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == settings.toggleKey then
         screenGui.Enabled = not screenGui.Enabled
+        if not screenGui.Enabled and gameState.chams then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.Character then
+                    for _, part in pairs(p.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            local highlight = part:FindFirstChild("PlayerCham")
+                            if highlight then highlight.Enabled = false end
+                        end
+                    end
+                end
+            end
+        elseif screenGui.Enabled and gameState.chams then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.Character then
+                    for _, part in pairs(p.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            local highlight = part:FindFirstChild("PlayerCham")
+                            if highlight then highlight.Enabled = true end
+                        end
+                    end
+                end
+            end
+        end
     end
 end)
 
--- Button hover effects
 local function addHoverEffect(button, hoverColor, normalColor)
     button.MouseEnter:Connect(function()
         TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
@@ -929,33 +937,45 @@ end
 addHoverEffect(settingsBtn, colors.surfaceHover, colors.surface)
 addHoverEffect(closeBtn, Color3.fromRGB(255, 100, 100), colors.danger)
 
--- Walk speed system
 gameState.connections.walkSpeed = RunService.Heartbeat:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         player.Character.Humanoid.WalkSpeed = gameState.walkSpeed
     end
 end)
 
--- Player events
 Players.PlayerAdded:Connect(function(newPlayer)
     wait(1)
-    if gameState.chams and newPlayer.Character then
-        for _, part in pairs(newPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                local highlight = Instance.new("Highlight")
-                highlight.Name = "PlayerCham"
-                highlight.Adornee = part
-                highlight.FillColor = colors.accent
-                highlight.OutlineColor = colors.text
-                highlight.FillTransparency = 0.3
-                highlight.OutlineTransparency = 0
-                highlight.Parent = part
-            end
+    if gameState.chams then
+        updateChamsForAllPlayers()
+    end
+    updateFollowDropdown()
+end)
+
+local function setupPlayerCharacterMonitoring(targetPlayer)
+    targetPlayer.CharacterAdded:Connect(function()
+        wait(0.5)
+        if gameState.chams then
+            updateChamsForAllPlayers()
         end
+        updateFollowDropdown()
+    end)
+end
+
+for _, existingPlayer in pairs(Players:GetPlayers()) do
+    if existingPlayer ~= player then
+        setupPlayerCharacterMonitoring(existingPlayer)
+    end
+end
+
+Players.PlayerAdded:Connect(function(newPlayer)
+    if newPlayer ~= player then
+        setupPlayerCharacterMonitoring(newPlayer)
     end
 end)
 
 Players.PlayerRemoving:Connect(function(removedPlayer)
+    updateFollowDropdown()
+    
     if gameState.targetPlayer == removedPlayer then
         gameState.targetPlayer = nil
         followSelected.Text = "None selected"
@@ -970,11 +990,22 @@ Players.PlayerRemoving:Connect(function(removedPlayer)
     end
 end)
 
--- Character respawn handling
+gameState.connections.dropdownMonitor = task.spawn(function()
+    while screenGui.Parent do
+        wait(5)
+        if followDropdown and followDropdown.Parent then
+            updateFollowDropdown()
+        end
+    end
+end)
+
 player.CharacterAdded:Connect(function()
     wait(1)
     
     if gameState.infJump then
+        if gameState.connections.infJump then
+            gameState.connections.infJump:Disconnect()
+        end
         gameState.connections.infJump = UserInputService.JumpRequest:Connect(function()
             if player.Character and player.Character:FindFirstChild("Humanoid") then
                 player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -983,6 +1014,9 @@ player.CharacterAdded:Connect(function()
     end
     
     if gameState.noclip then
+        if gameState.connections.noclip then
+            gameState.connections.noclip:Disconnect()
+        end
         gameState.connections.noclip = RunService.Stepped:Connect(function()
             if player.Character then
                 for _, part in pairs(player.Character:GetDescendants()) do
@@ -993,23 +1027,27 @@ player.CharacterAdded:Connect(function()
             end
         end)
     end
+    
+    if gameState.chams then
+        wait(0.5)
+        updateChamsForAllPlayers()
+    end
 end)
 
--- Dragging functionality
-local dragging = false
+local draggingWindow = false
 local dragStart = nil
 local startPos = nil
 
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
+        draggingWindow = true
         dragStart = input.Position
         startPos = mainWindow.Position
     end
 end)
 
 header.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+    if input.UserInputType == Enum.UserInputType.MouseMovement and draggingWindow then
         local delta = input.Position - dragStart
         mainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
@@ -1017,19 +1055,13 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
+        draggingWindow = false
     end
 end)
 
--- Backdrop click to close modal
 modalBackdrop.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         settingsModal.Visible = false
         modalBackdrop.Visible = false
     end
 end)
-
--- Initialize
-print("🎮 Modern INK GAME GUI loaded successfully!")
-print("📌 Press " .. settings.toggleKey.Name .. " to toggle the interface")
-print("✨ Features: Chams, Movement Controls, Follow Player, Quick Teleports")
