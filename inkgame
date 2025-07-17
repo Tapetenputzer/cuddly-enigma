@@ -17,7 +17,7 @@ screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 260, 0, 420)
+mainFrame.Size = UDim2.new(0, 260, 0, 440)
 mainFrame.Position = UDim2.new(0, 50, 0, 50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 mainFrame.BorderSizePixel = 0
@@ -79,7 +79,7 @@ closeCorner.Parent = closeButton
 
 local contentFrame = Instance.new("Frame")
 contentFrame.Name = "ContentFrame"
-contentFrame.Size = UDim2.new(1, -24, 1, -60)
+contentFrame.Size = UDim2.new(1, -24, 1, -80)
 contentFrame.Position = UDim2.new(0, 12, 0, 50)
 contentFrame.BackgroundTransparency = 1
 contentFrame.Parent = mainFrame
@@ -435,6 +435,19 @@ followPlayerStatus.Font = Enum.Font.Gotham
 followPlayerStatus.TextXAlignment = Enum.TextXAlignment.Left
 followPlayerStatus.Parent = followPlayerFrame
 
+-- Credits Label
+local creditsLabel = Instance.new("TextLabel")
+creditsLabel.Name = "CreditsLabel"
+creditsLabel.Size = UDim2.new(1, 0, 0, 20)
+creditsLabel.Position = UDim2.new(0, 0, 1, -20)
+creditsLabel.BackgroundTransparency = 1
+creditsLabel.Text = "made by massivendurchfall"
+creditsLabel.TextColor3 = Color3.fromRGB(80, 80, 100)
+creditsLabel.TextSize = 10
+creditsLabel.Font = Enum.Font.Gotham
+creditsLabel.TextXAlignment = Enum.TextXAlignment.Center
+creditsLabel.Parent = mainFrame
+
 -- Variables
 local infJumpEnabled = false
 local noclipEnabled = false
@@ -470,52 +483,77 @@ local function findPlayerByName(name)
     return nil
 end
 
+-- Verbesserte ESP-Funktionen
+local function createHighlight(part, color)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.Adornee = part
+    highlight.FillColor = color or Color3.fromRGB(255, 100, 100)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.3
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = part
+    return highlight
+end
+
 local function addESPToPlayer(targetPlayer)
     if not targetPlayer or not targetPlayer.Character then return end
     
-    -- Get all BaseParts in the character (works for both R6 and R15)
-    for _, part in pairs(targetPlayer.Character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Parent == targetPlayer.Character then
-            -- Skip if it already has ESP
-            if part:FindFirstChild("ESP_Highlight") then continue end
-            
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "ESP_Highlight"
-            highlight.Adornee = part
-            highlight.FillColor = Color3.fromRGB(255, 100, 100)
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillTransparency = 0.3
-            highlight.OutlineTransparency = 0
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.Parent = part
-            
-            table.insert(espHighlights, highlight)
+    local character = targetPlayer.Character
+    local humanoid = character:FindFirstChild("Humanoid")
+    
+    -- Prüfe ob bereits ESP vorhanden ist
+    if character:FindFirstChild("ESP_Highlight") then return end
+    
+    -- Erstelle Haupthighlight für den gesamten Charakter
+    local mainHighlight = Instance.new("Highlight")
+    mainHighlight.Name = "ESP_Highlight"
+    mainHighlight.Adornee = character
+    mainHighlight.FillColor = Color3.fromRGB(255, 100, 100)
+    mainHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    mainHighlight.FillTransparency = 0.5
+    mainHighlight.OutlineTransparency = 0
+    mainHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    mainHighlight.Parent = character
+    
+    table.insert(espHighlights, mainHighlight)
+    
+    -- Zusätzliche Highlights für wichtige Körperteile
+    local importantParts = {"Head", "Torso", "UpperTorso", "LowerTorso"}
+    
+    for _, partName in pairs(importantParts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            local partHighlight = createHighlight(part, Color3.fromRGB(100, 255, 100))
+            table.insert(espHighlights, partHighlight)
         end
     end
     
-    -- For R15 characters, also highlight body parts that might be deeper
-    for _, descendant in pairs(targetPlayer.Character:GetDescendants()) do
-        if descendant:IsA("BasePart") and 
-           descendant.Name ~= "HumanoidRootPart" and
-           not descendant:FindFirstChild("ESP_Highlight") and
-           (descendant.Name:find("Torso") or 
-            descendant.Name:find("Head") or 
-            descendant.Name:find("Arm") or 
-            descendant.Name:find("Leg") or
-            descendant.Name:find("Foot") or
-            descendant.Name:find("Hand")) then
+    -- Erstelle Namensschild
+    local head = character:FindFirstChild("Head")
+    if head then
+        local existingGui = head:FindFirstChild("ESP_NameGui")
+        if not existingGui then
+            local billboardGui = Instance.new("BillboardGui")
+            billboardGui.Name = "ESP_NameGui"
+            billboardGui.Adornee = head
+            billboardGui.Size = UDim2.new(0, 200, 0, 50)
+            billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+            billboardGui.Parent = head
             
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "ESP_Highlight"
-            highlight.Adornee = descendant
-            highlight.FillColor = Color3.fromRGB(255, 100, 100)
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillTransparency = 0.3
-            highlight.OutlineTransparency = 0
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.Parent = descendant
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextSize = 14
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            nameLabel.Parent = billboardGui
             
-            table.insert(espHighlights, highlight)
+            table.insert(espHighlights, billboardGui)
         end
     end
 end
@@ -528,10 +566,19 @@ local function removeAllESP()
     end
     espHighlights = {}
     
+    -- Entferne alle ESP-Elemente von allen Spielern
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
+            -- Entferne Character Highlights
+            for _, highlight in pairs(p.Character:GetChildren()) do
+                if highlight.Name == "ESP_Highlight" then
+                    highlight:Destroy()
+                end
+            end
+            
+            -- Entferne Part Highlights und Name GUIs
             for _, part in pairs(p.Character:GetDescendants()) do
-                if part:IsA("Highlight") and part.Name == "ESP_Highlight" then
+                if part.Name == "ESP_Highlight" or part.Name == "ESP_NameGui" then
                     part:Destroy()
                 end
             end
@@ -838,18 +885,16 @@ closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Player events
+-- Player events - Verbesserte ESP-Behandlung
 Players.PlayerAdded:Connect(function(newPlayer)
     if espEnabled then
         newPlayer.CharacterAdded:Connect(function(character)
-            -- Wait a bit longer for R15 characters to fully load
-            wait(2)
+            wait(1) -- Warte bis Charakter vollständig geladen ist
             addESPToPlayer(newPlayer)
         end)
         
-        -- If character already exists, add ESP immediately
         if newPlayer.Character then
-            wait(2)
+            wait(1)
             addESPToPlayer(newPlayer)
         end
     end
@@ -895,13 +940,12 @@ player.CharacterAdded:Connect(function(character)
     end
 end)
 
--- Handle character respawns for ESP (improved for R15)
+-- Handle character respawns for ESP
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= player then
         p.CharacterAdded:Connect(function(character)
             if espEnabled then
-                -- Wait longer for R15 body parts to load properly
-                wait(2)
+                wait(1) -- Warte bis Charakter vollständig geladen ist
                 addESPToPlayer(p)
             end
         end)
@@ -909,7 +953,7 @@ for _, p in pairs(Players:GetPlayers()) do
         -- Add ESP to existing characters
         if p.Character and espEnabled then
             spawn(function()
-                wait(2)
+                wait(1)
                 addESPToPlayer(p)
             end)
         end
@@ -920,3 +964,4 @@ end
 setupWalkSpeed()
 print("INK GAME GUI loaded! Hotkey:", settings.toggleKey.Name)
 print("Simply click on any player to target them!")
+print("Credits: made by massivendurchfall")
