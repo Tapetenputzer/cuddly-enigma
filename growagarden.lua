@@ -58,6 +58,9 @@ local autoSellTimer = 0
 
 local antiAFKConnection = nil
 
+-- Variable to track if we're waiting for hotkey input
+local waitingForHotkey = false
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "GameMenuGui"
 screenGui.Parent = playerGui
@@ -527,6 +530,8 @@ hotkeyButton.Text = "Hotkey: " .. settings.hotkey.Name
 hotkeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 hotkeyButton.TextScaled = true
 hotkeyButton.Font = Enum.Font.SourceSansBold
+hotkeyButton.Parent = settingsFrame
+
 local creditsLabel = Instance.new("TextLabel")
 creditsLabel.Size = UDim2.new(0.9, 0, 0, 25)
 creditsLabel.Position = UDim2.new(0.05, 0, 0, 200)
@@ -716,7 +721,7 @@ local function collectFromPlant(plant)
     wait(0.1)
     
     local virtualInputManager = game:GetService("VirtualInputManager")
-    for i = 1, 30 do
+    for i = 1, 15 do
         virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         wait(0.05)
         virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
@@ -762,7 +767,7 @@ local function autoSellLoop()
         wait(1)
         autoSellTimer = autoSellTimer + 1
         
-        if autoSellTimer >= 10 then
+        if autoSellTimer >= 30 then
             autoSellTimer = 0
             
             if settings.autoCollectPlant then
@@ -879,12 +884,14 @@ local function sellItemWithTeleport()
     sellItemButton.Text = "Sell Item"
 end
 
+-- Event handlers for tabs
 for tabName, button in pairs(tabButtons) do
     button.MouseButton1Click:Connect(function()
         switchTab(tabName)
     end)
 end
 
+-- Speed slider handling
 local draggingSpeed = false
 speedHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -912,6 +919,7 @@ speedHandle.InputEnded:Connect(function(input)
     end
 end)
 
+-- Toggle button handlers
 flyToggle.MouseButton1Click:Connect(function()
     toggleFly()
 end)
@@ -982,26 +990,34 @@ autoSellToggle.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Settings button handlers
 themeButton.MouseButton1Click:Connect(function()
     settings.theme = settings.theme == "Dark" and "Light" or "Dark"
     themeButton.Text = "Theme: " .. settings.theme
     updateTheme()
 end)
 
-local hotkeys = {Enum.KeyCode.F1, Enum.KeyCode.F2, Enum.KeyCode.F3, Enum.KeyCode.Insert, Enum.KeyCode.Home}
+-- Fixed hotkey button handler
 hotkeyButton.MouseButton1Click:Connect(function()
-    local currentIndex = 1
-    for i, key in ipairs(hotkeys) do
-        if key == settings.hotkey then
-            currentIndex = i
-            break
+    if waitingForHotkey then return end
+    
+    waitingForHotkey = true
+    hotkeyButton.Text = "Press any key..."
+    hotkeyButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+    
+    local connection
+    connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            settings.hotkey = input.KeyCode
+            hotkeyButton.Text = "Hotkey: " .. settings.hotkey.Name
+            hotkeyButton.BackgroundColor3 = themes[settings.theme].accent
+            waitingForHotkey = false
+            connection:Disconnect()
         end
-    end
-    currentIndex = currentIndex % #hotkeys + 1
-    settings.hotkey = hotkeys[currentIndex]
-    hotkeyButton.Text = "Hotkey: " .. settings.hotkey.Name
+    end)
 end)
 
+-- Other button handlers
 guiButton.MouseButton1Click:Connect(function()
     local seedShopGui = player.PlayerGui:FindFirstChild("Seed_Shop")
     if seedShopGui then
@@ -1018,6 +1034,7 @@ sellItemButton.MouseButton1Click:Connect(function()
     sellItemWithTeleport()
 end)
 
+-- Dragging functionality
 local dragging = false
 local dragStart = nil
 local startPos = nil
@@ -1043,14 +1060,16 @@ titleBar.InputEnded:Connect(function(input)
     end
 end)
 
+-- Fixed close button - now properly destroys the GUI
 closeButton.MouseButton1Click:Connect(function()
     local closeTween = TweenService:Create(menuFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 0, 0)})
     closeTween:Play()
     closeTween.Completed:Connect(function()
-        screenGui.Enabled = false
+        screenGui:Destroy()
     end)
 end)
 
+-- Fly movement system
 local flyConnection
 local function updateFly()
     if not settings.flyEnabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
@@ -1087,8 +1106,10 @@ end
 
 flyConnection = RunService.Heartbeat:Connect(updateFly)
 
+-- Hotkey system for menu toggle
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+    if gameProcessed or waitingForHotkey then return end
+    
     if input.KeyCode == settings.hotkey then
         screenGui.Enabled = not screenGui.Enabled
         if screenGui.Enabled then
@@ -1099,11 +1120,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- Character respawn handling
 player.CharacterAdded:Connect(function(character)
     character:WaitForChild("Humanoid")
     updateMovementSpeed()
 end)
 
+-- Initialize
 updateTheme()
 if player.Character then
     updateMovementSpeed()
