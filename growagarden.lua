@@ -716,7 +716,7 @@ local function collectFromPlant(plant)
     wait(0.1)
     
     local virtualInputManager = game:GetService("VirtualInputManager")
-    for i = 1, 15 do
+    for i = 1, 50 do
         virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         wait(0.05)
         virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
