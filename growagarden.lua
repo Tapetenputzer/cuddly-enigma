@@ -716,7 +716,7 @@ local function collectFromPlant(plant)
     wait(0.1)
     
     local virtualInputManager = game:GetService("VirtualInputManager")
-    for i = 1, 5 do
+    for i = 1, 15 do
         virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         wait(0.05)
         virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
@@ -762,7 +762,7 @@ local function autoSellLoop()
         wait(1)
         autoSellTimer = autoSellTimer + 1
         
-        if autoSellTimer >= 10 then
+        if autoSellTimer >= 30 then
             autoSellTimer = 0
             
             if settings.autoCollectPlant then
