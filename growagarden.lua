@@ -1,4 +1,5 @@
--- LocalScript (must be placed in StarterGui or StarterPlayerScripts)
+-- Grow a Garden Script
+-- Made by massivendurchfall
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,24 +10,21 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Wait for Remote Events
 local sellInventoryEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Sell_Inventory")
 local sellItemEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Sell_Item")
 
--- Target coordinates for selling
 local SELL_POSITION = Vector3.new(86, 2, 0)
 
--- Settings
 local settings = {
     hotkey = Enum.KeyCode.F1,
-    theme = "Dark", -- "Dark" or "Light"
+    theme = "Dark",
     movementSpeed = 16,
     flyEnabled = false,
     autoCollectPlant = false,
-    autoSellInventory = false
+    autoSellInventory = false,
+    antiAFK = false
 }
 
--- Themes
 local themes = {
     Dark = {
         primary = Color3.fromRGB(45, 45, 45),
@@ -48,25 +46,22 @@ local themes = {
     }
 }
 
--- Variables for fly
 local flyBodyVelocity = nil
 local flyBodyAngularVelocity = nil
 
--- Variables for auto collect
 local autoCollectConnection = nil
 local plantIndex = 1
-local collectDelay = 2 -- seconds between collections
+local collectDelay = 1
 
--- Variables for auto sell
 local autoSellConnection = nil
-local sellDelay = 30 -- seconds between auto sells
+local autoSellTimer = 0
 
--- Create main GUI
+local antiAFKConnection = nil
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "GameMenuGui"
 screenGui.Parent = playerGui
 
--- Create draggable menu frame
 local menuFrame = Instance.new("Frame")
 menuFrame.Name = "MenuFrame"
 menuFrame.Size = UDim2.new(0, 400, 0, 500)
@@ -76,7 +71,6 @@ menuFrame.BorderSizePixel = 3
 menuFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 menuFrame.Parent = screenGui
 
--- Create title bar for dragging
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 50)
@@ -85,19 +79,17 @@ titleBar.BackgroundColor3 = themes[settings.theme].secondary
 titleBar.BorderSizePixel = 0
 titleBar.Parent = menuFrame
 
--- Create title label
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "TitleLabel"
 titleLabel.Size = UDim2.new(0.8, 0, 1, 0)
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Game Menu"
+titleLabel.Text = "Grow a Garden Script"
 titleLabel.TextColor3 = themes[settings.theme].text
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = titleBar
 
--- Create close button
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0, 40, 0, 40)
@@ -111,7 +103,6 @@ closeButton.TextScaled = true
 closeButton.Font = Enum.Font.SourceSansBold
 closeButton.Parent = titleBar
 
--- Create tab buttons container
 local tabContainer = Instance.new("Frame")
 tabContainer.Name = "TabContainer"
 tabContainer.Size = UDim2.new(1, 0, 0, 40)
@@ -120,8 +111,7 @@ tabContainer.BackgroundColor3 = themes[settings.theme].secondary
 tabContainer.BorderSizePixel = 0
 tabContainer.Parent = menuFrame
 
--- Tab buttons
-local tabs = {"Player", "Sell", "AutoFarm", "Settings"}
+local tabs = {"Player", "RE", "AutoFarm", "Settings"}
 local tabButtons = {}
 local currentTab = "Player"
 
@@ -141,7 +131,6 @@ for i, tabName in ipairs(tabs) do
     tabButtons[tabName] = tabButton
 end
 
--- Create content frame
 local contentFrame = Instance.new("Frame")
 contentFrame.Name = "ContentFrame"
 contentFrame.Size = UDim2.new(1, 0, 1, -90)
@@ -149,7 +138,6 @@ contentFrame.Position = UDim2.new(0, 0, 0, 90)
 contentFrame.BackgroundTransparency = 1
 contentFrame.Parent = menuFrame
 
--- Create tab frames
 local tabFrames = {}
 for _, tabName in ipairs(tabs) do
     local frame = Instance.new("Frame")
@@ -162,10 +150,8 @@ for _, tabName in ipairs(tabs) do
     tabFrames[tabName] = frame
 end
 
--- Player Tab Content
 local playerFrame = tabFrames["Player"]
 
--- Movement Speed Slider
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size = UDim2.new(0.9, 0, 0, 30)
 speedLabel.Position = UDim2.new(0.05, 0, 0, 10)
@@ -186,14 +172,13 @@ speedSlider.Parent = playerFrame
 
 local speedHandle = Instance.new("TextButton")
 speedHandle.Size = UDim2.new(0, 20, 1, 0)
-speedHandle.Position = UDim2.new((settings.movementSpeed - 16) / 84, -10, 0, 0) -- 16-100 range
+speedHandle.Position = UDim2.new((settings.movementSpeed - 16) / 84, -10, 0, 0)
 speedHandle.BackgroundColor3 = themes[settings.theme].accent
 speedHandle.BorderSizePixel = 1
 speedHandle.BorderColor3 = Color3.fromRGB(0, 0, 0)
 speedHandle.Text = ""
 speedHandle.Parent = speedSlider
 
--- Fly Toggle
 local flyToggle = Instance.new("TextButton")
 flyToggle.Size = UDim2.new(0.9, 0, 0, 40)
 flyToggle.Position = UDim2.new(0.05, 0, 0, 90)
@@ -206,8 +191,19 @@ flyToggle.TextScaled = true
 flyToggle.Font = Enum.Font.SourceSansBold
 flyToggle.Parent = playerFrame
 
--- Sell Tab Content
-local sellFrame = tabFrames["Sell"]
+local antiAFKToggle = Instance.new("TextButton")
+antiAFKToggle.Size = UDim2.new(0.9, 0, 0, 40)
+antiAFKToggle.Position = UDim2.new(0.05, 0, 0, 140)
+antiAFKToggle.BackgroundColor3 = Color3.fromRGB(170, 85, 85)
+antiAFKToggle.BorderSizePixel = 2
+antiAFKToggle.BorderColor3 = Color3.fromRGB(0, 0, 0)
+antiAFKToggle.Text = "Anti AFK: OFF"
+antiAFKToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+antiAFKToggle.TextScaled = true
+antiAFKToggle.Font = Enum.Font.SourceSansBold
+antiAFKToggle.Parent = playerFrame
+
+local reFrame = tabFrames["RE"]
 
 local sellInventoryButton = Instance.new("TextButton")
 sellInventoryButton.Size = UDim2.new(0.9, 0, 0, 60)
@@ -219,7 +215,7 @@ sellInventoryButton.Text = "Sell Inventory"
 sellInventoryButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 sellInventoryButton.TextScaled = true
 sellInventoryButton.Font = Enum.Font.SourceSansBold
-sellInventoryButton.Parent = sellFrame
+sellInventoryButton.Parent = reFrame
 
 local sellItemButton = Instance.new("TextButton")
 sellItemButton.Size = UDim2.new(0.9, 0, 0, 60)
@@ -231,9 +227,236 @@ sellItemButton.Text = "Sell Item"
 sellItemButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 sellItemButton.TextScaled = true
 sellItemButton.Font = Enum.Font.SourceSansBold
-sellItemButton.Parent = sellFrame
+sellItemButton.Parent = reFrame
 
--- AutoFarm Tab Content
+local guiButton = Instance.new("TextButton")
+guiButton.Size = UDim2.new(0.9, 0, 0, 60)
+guiButton.Position = UDim2.new(0.05, 0, 0, 180)
+guiButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+guiButton.BorderSizePixel = 2
+guiButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+local seedDropdown = Instance.new("TextButton")
+seedDropdown.Size = UDim2.new(0.9, 0, 0, 40)
+seedDropdown.Position = UDim2.new(0.05, 0, 0, 260)
+seedDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+seedDropdown.BorderSizePixel = 2
+seedDropdown.BorderColor3 = Color3.fromRGB(0, 0, 0)
+seedDropdown.Text = "Select Seed"
+seedDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+seedDropdown.TextScaled = true
+seedDropdown.Font = Enum.Font.SourceSans
+seedDropdown.Parent = reFrame
+
+local dropdownFrame = Instance.new("Frame")
+dropdownFrame.Size = UDim2.new(0.9, 0, 0, 0)
+dropdownFrame.Position = UDim2.new(0.05, 0, 0, 300)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+dropdownFrame.BorderSizePixel = 2
+dropdownFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+dropdownFrame.Visible = false
+dropdownFrame.ClipsDescendants = true
+dropdownFrame.Parent = reFrame
+
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+scrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+scrollingFrame.BackgroundTransparency = 1
+scrollingFrame.ScrollBarThickness = 6
+scrollingFrame.Parent = dropdownFrame
+
+local buySeedButton = Instance.new("TextButton")
+buySeedButton.Size = UDim2.new(0.9, 0, 0, 40)
+buySeedButton.Position = UDim2.new(0.05, 0, 0, 310)
+buySeedButton.BackgroundColor3 = Color3.fromRGB(85, 170, 85)
+buySeedButton.BorderSizePixel = 2
+buySeedButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+buySeedButton.Text = "Buy Selected Seed"
+buySeedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+buySeedButton.TextScaled = true
+buySeedButton.Font = Enum.Font.SourceSansBold
+buySeedButton.Parent = reFrame
+
+local selectedSeed = nil
+local selectedSeedButton = nil
+
+local function getAvailableSeeds()
+    local seedShopGui = player.PlayerGui:FindFirstChild("Seed_Shop")
+    if not seedShopGui then return {} end
+    
+    local frame = seedShopGui:FindFirstChild("Frame")
+    if not frame then return {} end
+    
+    local scrollingFrame = frame:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return {} end
+    
+    local availableSeeds = {}
+    
+    for _, child in pairs(scrollingFrame:GetChildren()) do
+        if child:IsA("Frame") and child.Name ~= "UIListLayout" and not child.Name:find("_Padding") then
+            local seedName = child.Name
+            if seedName and seedName ~= "" then
+                table.insert(availableSeeds, {
+                    name = seedName,
+                    frame = child
+                })
+            end
+        end
+    end
+    
+    return availableSeeds
+end
+
+local function updateDropdown()
+    for _, child in pairs(scrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    local seeds = getAvailableSeeds()
+    local yPos = 0
+    
+    for _, seed in pairs(seeds) do
+        local seedButton = Instance.new("TextButton")
+        seedButton.Size = UDim2.new(1, 0, 0, 30)
+        seedButton.Position = UDim2.new(0, 0, 0, yPos)
+        seedButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        seedButton.BorderSizePixel = 1
+        seedButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+        seedButton.Text = seed.name
+        seedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        seedButton.TextScaled = true
+        seedButton.Font = Enum.Font.SourceSans
+        seedButton.Parent = scrollingFrame
+        
+        seedButton.MouseButton1Click:Connect(function()
+            selectedSeed = seed
+            selectedSeedButton = seed.frame
+            seedDropdown.Text = seed.name
+            dropdownFrame.Visible = false
+            dropdownFrame.Size = UDim2.new(0.9, 0, 0, 0)
+        end)
+        
+        yPos = yPos + 30
+    end
+    
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
+end
+
+seedDropdown.MouseButton1Click:Connect(function()
+    if dropdownFrame.Visible then
+        dropdownFrame.Visible = false
+        dropdownFrame.Size = UDim2.new(0.9, 0, 0, 0)
+    else
+        updateDropdown()
+        local seeds = getAvailableSeeds()
+        local dropdownHeight = math.min(#seeds * 30, 150)
+        
+        dropdownFrame.Size = UDim2.new(0.9, 0, 0, dropdownHeight)
+        dropdownFrame.Visible = true
+    end
+end)
+
+buySeedButton.MouseButton1Click:Connect(function()
+    if selectedSeedButton then
+        -- Look for the Frame inside the selected seed
+        local seedFrame = selectedSeedButton:FindFirstChild("Frame")
+        if seedFrame then
+            -- Try to find Sheckles_Buy button first (regular currency)
+            local shecklesBuy = seedFrame:FindFirstChild("Sheckles_Buy")
+            local robuxBuy = seedFrame:FindFirstChild("Robux_Buy")
+            
+            local buyElement = shecklesBuy or robuxBuy -- Prefer Sheckles over Robux
+            
+            if buyElement then
+                print("Found buy element:", buyElement.Name, "Type:", buyElement.ClassName)
+                
+                -- Try to find a clickable element inside
+                local clickableButton = nil
+                
+                -- Check if it's directly clickable
+                if buyElement:IsA("GuiButton") then
+                    clickableButton = buyElement
+                else
+                    -- Look for TextButton or ImageButton inside
+                    for _, child in pairs(buyElement:GetDescendants()) do
+                        if child:IsA("GuiButton") then
+                            clickableButton = child
+                            break
+                        end
+                    end
+                end
+                
+                if clickableButton then
+                    print("Found clickable button:", clickableButton.Name)
+                    
+                    -- Try different methods to click
+                    local success = false
+                    
+                    -- Method 1: Direct Fire
+                    pcall(function()
+                        clickableButton.MouseButton1Click:Fire()
+                        success = true
+                        print("Method 1 (Fire) successful")
+                    end)
+                    
+                    -- Method 2: getconnections
+                    if not success then
+                        pcall(function()
+                            for i, connection in pairs(getconnections(clickableButton.MouseButton1Click)) do
+                                connection:Fire()
+                                success = true
+                                print("Method 2 (getconnections) successful")
+                                break
+                            end
+                        end)
+                    end
+                    
+                    -- Method 3: Virtual click
+                    if not success then
+                        pcall(function()
+                            local VirtualInputManager = game:GetService("VirtualInputManager")
+                            local buttonPos = clickableButton.AbsolutePosition
+                            local buttonSize = clickableButton.AbsoluteSize
+                            VirtualInputManager:SendMouseButtonEvent(
+                                buttonPos.X + buttonSize.X/2, 
+                                buttonPos.Y + buttonSize.Y/2, 
+                                0, true, game, 1
+                            )
+                            wait(0.1)
+                            VirtualInputManager:SendMouseButtonEvent(
+                                buttonPos.X + buttonSize.X/2, 
+                                buttonPos.Y + buttonSize.Y/2, 
+                                0, false, game, 1
+                            )
+                            success = true
+                            print("Method 3 (VirtualInput) successful")
+                        end)
+                    end
+                    
+                    if not success then
+                        print("All methods failed")
+                    end
+                else
+                    print("No clickable button found inside", buyElement.Name)
+                end
+            else
+                print("Buy element not found")
+            end
+        else
+            print("Frame not found in seed")
+        end
+    else
+        print("No seed selected")
+    end
+end)
+
+guiButton.Text = "Open Seed Shop"
+guiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+guiButton.TextScaled = true
+guiButton.Font = Enum.Font.SourceSansBold
+guiButton.Parent = reFrame
+
 local autoFarmFrame = tabFrames["AutoFarm"]
 
 local autoCollectToggle = Instance.new("TextButton")
@@ -248,10 +471,20 @@ autoCollectToggle.TextScaled = true
 autoCollectToggle.Font = Enum.Font.SourceSansBold
 autoCollectToggle.Parent = autoFarmFrame
 
--- Settings Tab Content
+local autoSellToggle = Instance.new("TextButton")
+autoSellToggle.Size = UDim2.new(0.9, 0, 0, 60)
+autoSellToggle.Position = UDim2.new(0.05, 0, 0, 100)
+autoSellToggle.BackgroundColor3 = settings.autoSellInventory and themes[settings.theme].success or themes[settings.theme].error
+autoSellToggle.BorderSizePixel = 2
+autoSellToggle.BorderColor3 = Color3.fromRGB(0, 0, 0)
+autoSellToggle.Text = "Auto Sell Inventory: " .. (settings.autoSellInventory and "ON" or "OFF")
+autoSellToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoSellToggle.TextScaled = true
+autoSellToggle.Font = Enum.Font.SourceSansBold
+autoSellToggle.Parent = autoFarmFrame
+
 local settingsFrame = tabFrames["Settings"]
 
--- Theme Selector
 local themeLabel = Instance.new("TextLabel")
 themeLabel.Size = UDim2.new(0.9, 0, 0, 30)
 themeLabel.Position = UDim2.new(0.05, 0, 0, 10)
@@ -274,7 +507,6 @@ themeButton.TextScaled = true
 themeButton.Font = Enum.Font.SourceSansBold
 themeButton.Parent = settingsFrame
 
--- Hotkey Selector
 local hotkeyLabel = Instance.new("TextLabel")
 hotkeyLabel.Size = UDim2.new(0.9, 0, 0, 30)
 hotkeyLabel.Position = UDim2.new(0.05, 0, 0, 110)
@@ -295,9 +527,17 @@ hotkeyButton.Text = "Hotkey: " .. settings.hotkey.Name
 hotkeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 hotkeyButton.TextScaled = true
 hotkeyButton.Font = Enum.Font.SourceSansBold
-hotkeyButton.Parent = settingsFrame
+local creditsLabel = Instance.new("TextLabel")
+creditsLabel.Size = UDim2.new(0.9, 0, 0, 25)
+creditsLabel.Position = UDim2.new(0.05, 0, 0, 200)
+creditsLabel.BackgroundTransparency = 1
+creditsLabel.Text = "Made by massivendurchfall"
+creditsLabel.TextColor3 = themes[settings.theme].text
+creditsLabel.TextScaled = true
+creditsLabel.Font = Enum.Font.SourceSansItalic
+creditsLabel.TextTransparency = 0.5
+creditsLabel.Parent = settingsFrame
 
--- Functions
 local function updateTheme()
     local theme = themes[settings.theme]
     menuFrame.BackgroundColor3 = theme.primary
@@ -358,145 +598,132 @@ local function toggleFly()
     end
 end
 
--- Auto Collect Functions
+local function toggleAntiAFK()
+    settings.antiAFK = not settings.antiAFK
+    antiAFKToggle.Text = "Anti AFK: " .. (settings.antiAFK and "ON" or "OFF")
+    antiAFKToggle.BackgroundColor3 = settings.antiAFK and Color3.fromRGB(85, 170, 85) or Color3.fromRGB(170, 85, 85)
+    
+    if settings.antiAFK then
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        
+        antiAFKConnection = task.spawn(function()
+            while settings.antiAFK do
+                wait(60)
+                if settings.antiAFK then
+                    VirtualInputManager:SendMouseMoveEvent(1, 1, game)
+                    wait(0.1)
+                    VirtualInputManager:SendMouseMoveEvent(-1, -1, game)
+                end
+            end
+        end)
+    else
+        if antiAFKConnection then
+            task.cancel(antiAFKConnection)
+            antiAFKConnection = nil
+        end
+    end
+end
+
 local function getAllPlants()
     local mainFarm = workspace:FindFirstChild("Farm")
     if not mainFarm then 
-        print("Debug: Main Farm folder not found in workspace")
         return {} 
     end
     
     local plants = {}
     
-    -- Look through all Farm folders in the main Farm
     for _, farmFolder in pairs(mainFarm:GetChildren()) do
         if farmFolder.Name == "Farm" and (farmFolder:IsA("Folder") or farmFolder:IsA("Model")) then
-            print("Debug: Checking Farm folder:", farmFolder.Name)
-            
             local importantFolder = farmFolder:FindFirstChild("Important")
             if importantFolder then
                 local plantsFolder = importantFolder:FindFirstChild("Plants_Physical")
                 if plantsFolder then
-                    print("Debug: Found Plants_Physical in", farmFolder.Name)
-                    
-                    -- Go through all plants in this Plants_Physical folder
                     for _, plant in pairs(plantsFolder:GetChildren()) do
                         if plant:IsA("Model") or plant:IsA("Folder") then
                             local fruitSpawn = plant:FindFirstChild("Fruit_Spawn")
                             if fruitSpawn then
-                                -- Get the first Spawn_Point (in case there are multiple)
                                 local spawnPoint = fruitSpawn:FindFirstChild("Spawn_Point")
                                 if spawnPoint then
-                                    print("Debug: Found plant:", plant.Name, "with spawn point:", spawnPoint.Name, "Type:", spawnPoint.ClassName)
                                     table.insert(plants, {
                                         name = plant.Name,
                                         spawnPoint = spawnPoint
                                     })
-                                else
-                                    print("Debug: No Spawn_Point found in", plant.Name, "Fruit_Spawn")
                                 end
-                            else
-                                print("Debug: No Fruit_Spawn found in", plant.Name)
                             end
                         end
                     end
-                else
-                    print("Debug: No Plants_Physical found in", farmFolder.Name, "Important")
                 end
-            else
-                print("Debug: No Important folder found in", farmFolder.Name)
             end
         end
     end
     
-    print("Debug: Total plants found across all Farm folders:", #plants)
     return plants
 end
 
 local function collectFromPlant(plant)
     local character = player.Character
     if not character then
-        print("Debug: No character found")
         return false
     end
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
-        print("Debug: No HumanoidRootPart found")
         return false
     end
     
     local spawnPoint = plant.spawnPoint
     if not spawnPoint then
-        print("Debug: SpawnPoint is nil for plant:", plant.name)
         return false
     end
     
-    print("Debug: Teleporting to plant:", plant.name, "SpawnPoint type:", spawnPoint.ClassName)
-    
-    -- Teleport to plant spawn point with better error handling - ON TOP of the part
     local success, error = pcall(function()
         if spawnPoint:IsA("Part") then
             if spawnPoint.CFrame then
-                -- Teleport on top of the part
                 local partSize = spawnPoint.Size
                 humanoidRootPart.CFrame = spawnPoint.CFrame + Vector3.new(0, partSize.Y/2 + 3, 0)
-                print("Debug: Teleported on top of Part")
             else
-                print("Debug: Part has no CFrame")
                 return false
             end
         elseif spawnPoint:IsA("Model") then
             if spawnPoint.PrimaryPart and spawnPoint.PrimaryPart.CFrame then
                 local partSize = spawnPoint.PrimaryPart.Size
                 humanoidRootPart.CFrame = spawnPoint.PrimaryPart.CFrame + Vector3.new(0, partSize.Y/2 + 3, 0)
-                print("Debug: Teleported on top of Model PrimaryPart")
             else
-                print("Debug: Model has no PrimaryPart or PrimaryPart has no CFrame")
                 return false
             end
         elseif spawnPoint:IsA("MeshPart") then
             if spawnPoint.CFrame then
                 local partSize = spawnPoint.Size
                 humanoidRootPart.CFrame = spawnPoint.CFrame + Vector3.new(0, partSize.Y/2 + 3, 0)
-                print("Debug: Teleported on top of MeshPart")
             else
-                print("Debug: MeshPart has no CFrame")
                 return false
             end
         else
-            -- Try to get position from the object - add safe offset
             if spawnPoint.Position then
                 humanoidRootPart.CFrame = CFrame.new(spawnPoint.Position + Vector3.new(0, 5, 0))
-                print("Debug: Teleported using Position property with offset")
             elseif spawnPoint.CFrame then
                 humanoidRootPart.CFrame = spawnPoint.CFrame + Vector3.new(0, 5, 0)
-                print("Debug: Teleported using CFrame property with offset")
             else
-                print("Debug: SpawnPoint has no Position or CFrame property, type:", spawnPoint.ClassName)
                 return false
             end
         end
     end)
     
     if not success then
-        print("Debug: Error teleporting to plant:", error)
         return false
     end
     
-    print("Debug: Successfully teleported to", plant.name)
-    
-    -- Press E to collect
-    wait(0.2) -- Short delay after teleport
-    print("Debug: Pressing E to collect from", plant.name)
-    
-    -- Simulate E key press
-    local virtualInputManager = game:GetService("VirtualInputManager")
-    virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     wait(0.1)
-    virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     
-    wait(0.3) -- Wait for collection to complete
+    local virtualInputManager = game:GetService("VirtualInputManager")
+    for i = 1, 5 do
+        virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        wait(0.05)
+        virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        wait(0.05)
+    end
+    
+    wait(0.1)
     return true
 end
 
@@ -505,77 +732,159 @@ local function autoCollectLoop()
         local plants = getAllPlants()
         
         if #plants == 0 then
-            print("Debug: No plants found, waiting 5 seconds")
-            wait(5) -- Wait longer if no plants found
+            wait(5)
             continue
         end
         
-        print("Debug: Starting collection cycle with", #plants, "plants")
-        
-        -- Cycle through plants
         if plantIndex > #plants then
             plantIndex = 1
-            print("Debug: Resetting plant index to 1")
         end
         
         local currentPlant = plants[plantIndex]
         if currentPlant then
-            print("Debug: Attempting to collect from plant", plantIndex, ":", currentPlant.name)
             local success = collectFromPlant(currentPlant)
             
             if success then
                 plantIndex = plantIndex + 1
-                print("Debug: Successfully collected, moving to next plant")
             else
-                print("Debug: Failed to collect from plant:", currentPlant.name)
-                plantIndex = plantIndex + 1 -- Move to next plant even if failed
+                plantIndex = plantIndex + 1
             end
         else
-            print("Debug: Current plant is nil, resetting index")
             plantIndex = 1
         end
         
         wait(collectDelay)
     end
-    
-    print("Debug: Auto collect loop ended")
+end
+
+local function autoSellLoop()
+    while settings.autoSellInventory do
+        wait(1)
+        autoSellTimer = autoSellTimer + 1
+        
+        if autoSellTimer >= 10 then
+            autoSellTimer = 0
+            
+            if settings.autoCollectPlant then
+                settings.autoCollectPlant = false
+                autoCollectToggle.Text = "Auto Collect Plant: OFF"
+                autoCollectToggle.BackgroundColor3 = themes[settings.theme].error
+                
+                if autoCollectConnection then
+                    task.cancel(autoCollectConnection)
+                    autoCollectConnection = nil
+                end
+            end
+            
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = character.HumanoidRootPart
+                local originalPosition = humanoidRootPart.CFrame
+                
+                humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
+                wait(0.5)
+                
+                sellInventoryEvent:FireServer()
+                wait(1)
+                
+                humanoidRootPart.CFrame = originalPosition
+                wait(0.5)
+            end
+            
+            settings.autoCollectPlant = true
+            autoCollectToggle.Text = "Auto Collect Plant: ON"
+            autoCollectToggle.BackgroundColor3 = themes[settings.theme].success
+            
+            autoCollectConnection = task.spawn(autoCollectLoop)
+        end
+    end
 end
 
 local function startAutoCollect()
-    print("Debug: Starting auto collect")
-    
     if autoCollectConnection then
         task.cancel(autoCollectConnection)
-        autoCollectConnection = nil
     end
     
     plantIndex = 1
-    print("Debug: Auto collect started successfully")
-    
-    -- Start the auto collect loop in a new thread
     autoCollectConnection = task.spawn(autoCollectLoop)
 end
 
 local function stopAutoCollect()
-    print("Debug: Stopping auto collect")
-    
     if autoCollectConnection then
         task.cancel(autoCollectConnection)
         autoCollectConnection = nil
     end
-    
-    print("Debug: Auto collect stopped successfully")
 end
 
--- Event connections
--- Tab switching
+local function startAutoSell()
+    if autoSellConnection then
+        task.cancel(autoSellConnection)
+    end
+    
+    autoSellTimer = 0
+    autoSellConnection = task.spawn(autoSellLoop)
+end
+
+local function stopAutoSell()
+    if autoSellConnection then
+        task.cancel(autoSellConnection)
+        autoSellConnection = nil
+    end
+    autoSellTimer = 0
+end
+
+local function sellInventoryWithTeleport()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local originalPosition = humanoidRootPart.CFrame
+    
+    sellInventoryButton.Text = "Selling..."
+    
+    humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
+    wait(0.5)
+    
+    sellInventoryEvent:FireServer()
+    wait(1)
+    
+    humanoidRootPart.CFrame = originalPosition
+    wait(0.5)
+    
+    sellInventoryButton.Text = "Sell Inventory"
+end
+
+local function sellItemWithTeleport()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local originalPosition = humanoidRootPart.CFrame
+    
+    sellItemButton.Text = "Selling..."
+    
+    humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
+    wait(0.5)
+    
+    sellItemEvent:FireServer()
+    wait(1)
+    
+    humanoidRootPart.CFrame = originalPosition
+    wait(0.5)
+    
+    sellItemButton.Text = "Sell Item"
+end
+
 for tabName, button in pairs(tabButtons) do
     button.MouseButton1Click:Connect(function()
         switchTab(tabName)
     end)
 end
 
--- Speed slider
 local draggingSpeed = false
 speedHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -590,7 +899,7 @@ speedHandle.InputChanged:Connect(function(input)
         local sliderSize = speedSlider.AbsoluteSize.X
         local percentage = math.clamp((mousePos - sliderPos) / sliderSize, 0, 1)
         
-        settings.movementSpeed = math.floor(16 + (percentage * 84)) -- 16-100 range
+        settings.movementSpeed = math.floor(16 + (percentage * 84))
         speedHandle.Position = UDim2.new(percentage, -10, 0, 0)
         speedLabel.Text = "Movement Speed: " .. settings.movementSpeed
         updateMovementSpeed()
@@ -603,32 +912,82 @@ speedHandle.InputEnded:Connect(function(input)
     end
 end)
 
--- Fly toggle
 flyToggle.MouseButton1Click:Connect(function()
     toggleFly()
 end)
 
--- Auto collect toggle
+antiAFKToggle.MouseButton1Click:Connect(function()
+    toggleAntiAFK()
+end)
+
 autoCollectToggle.MouseButton1Click:Connect(function()
     settings.autoCollectPlant = not settings.autoCollectPlant
     autoCollectToggle.Text = "Auto Collect Plant: " .. (settings.autoCollectPlant and "ON" or "OFF")
     autoCollectToggle.BackgroundColor3 = settings.autoCollectPlant and themes[settings.theme].success or themes[settings.theme].error
     
+    if not settings.autoCollectPlant and settings.autoSellInventory then
+        settings.autoSellInventory = false
+        autoSellToggle.Text = "Auto Sell Inventory: OFF"
+        autoSellToggle.BackgroundColor3 = themes[settings.theme].error
+        stopAutoSell()
+    end
+    
     if settings.autoCollectPlant then
+        if not settings.flyEnabled then
+            settings.flyEnabled = true
+            flyToggle.Text = "Fly: ON"
+            flyToggle.BackgroundColor3 = themes[settings.theme].success
+            
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = character.HumanoidRootPart
+                flyBodyVelocity = Instance.new("BodyVelocity")
+                flyBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+                flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                flyBodyVelocity.Parent = humanoidRootPart
+                
+                flyBodyAngularVelocity = Instance.new("BodyAngularVelocity")
+                flyBodyAngularVelocity.MaxTorque = Vector3.new(4000, 4000, 4000)
+                flyBodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+                flyBodyAngularVelocity.Parent = humanoidRootPart
+            end
+        end
         startAutoCollect()
     else
+        if settings.flyEnabled then
+            settings.flyEnabled = false
+            flyToggle.Text = "Fly: OFF"
+            flyToggle.BackgroundColor3 = themes[settings.theme].error
+            
+            if flyBodyVelocity then flyBodyVelocity:Destroy() end
+            if flyBodyAngularVelocity then flyBodyAngularVelocity:Destroy() end
+        end
         stopAutoCollect()
     end
 end)
 
--- Theme selector
+autoSellToggle.MouseButton1Click:Connect(function()
+    if not settings.autoCollectPlant then
+        return
+    end
+    
+    settings.autoSellInventory = not settings.autoSellInventory
+    autoSellToggle.Text = "Auto Sell Inventory: " .. (settings.autoSellInventory and "ON" or "OFF")
+    autoSellToggle.BackgroundColor3 = settings.autoSellInventory and themes[settings.theme].success or themes[settings.theme].error
+    
+    if settings.autoSellInventory then
+        startAutoSell()
+    else
+        stopAutoSell()
+    end
+end)
+
 themeButton.MouseButton1Click:Connect(function()
     settings.theme = settings.theme == "Dark" and "Light" or "Dark"
     themeButton.Text = "Theme: " .. settings.theme
     updateTheme()
 end)
 
--- Hotkey selector (simplified - cycles through common keys)
 local hotkeys = {Enum.KeyCode.F1, Enum.KeyCode.F2, Enum.KeyCode.F3, Enum.KeyCode.Insert, Enum.KeyCode.Home}
 hotkeyButton.MouseButton1Click:Connect(function()
     local currentIndex = 1
@@ -643,70 +1002,14 @@ hotkeyButton.MouseButton1Click:Connect(function()
     hotkeyButton.Text = "Hotkey: " .. settings.hotkey.Name
 end)
 
--- Selling functions
-local function sellInventoryWithTeleport()
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
-        print("Error: No character found!")
-        return
+guiButton.MouseButton1Click:Connect(function()
+    local seedShopGui = player.PlayerGui:FindFirstChild("Seed_Shop")
+    if seedShopGui then
+        seedShopGui.Enabled = not seedShopGui.Enabled
+        guiButton.Text = seedShopGui.Enabled and "Close Seed Shop" or "Open Seed Shop"
     end
-    
-    local humanoidRootPart = character.HumanoidRootPart
-    local originalPosition = humanoidRootPart.CFrame
-    
-    sellInventoryButton.Text = "Selling..."
-    print("Teleporting to sell point...")
-    
-    humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
-    wait(0.5)
-    
-    print("Selling inventory...")
-    sellInventoryEvent:FireServer()
-    wait(1)
-    
-    print("Teleporting back...")
-    humanoidRootPart.CFrame = originalPosition
-    wait(0.5)
-    
-    sellInventoryButton.Text = "Sell Inventory"
-    print("Inventory sold!")
-    
-    wait(3)
-    print("Ready")
-end
+end)
 
-local function sellItemWithTeleport()
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
-        print("Error: No character found!")
-        return
-    end
-    
-    local humanoidRootPart = character.HumanoidRootPart
-    local originalPosition = humanoidRootPart.CFrame
-    
-    sellItemButton.Text = "Selling..."
-    print("Teleporting to sell point...")
-    
-    humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
-    wait(0.5)
-    
-    print("Selling item...")
-    sellItemEvent:FireServer()
-    wait(1)
-    
-    print("Teleporting back...")
-    humanoidRootPart.CFrame = originalPosition
-    wait(0.5)
-    
-    sellItemButton.Text = "Sell Item"
-    print("Item sold!")
-    
-    wait(3)
-    print("Ready")
-end
-
--- Sell button events
 sellInventoryButton.MouseButton1Click:Connect(function()
     sellInventoryWithTeleport()
 end)
@@ -715,7 +1018,6 @@ sellItemButton.MouseButton1Click:Connect(function()
     sellItemWithTeleport()
 end)
 
--- Dragging functionality
 local dragging = false
 local dragStart = nil
 local startPos = nil
@@ -741,7 +1043,6 @@ titleBar.InputEnded:Connect(function(input)
     end
 end)
 
--- Close button
 closeButton.MouseButton1Click:Connect(function()
     local closeTween = TweenService:Create(menuFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 0, 0)})
     closeTween:Play()
@@ -750,7 +1051,6 @@ closeButton.MouseButton1Click:Connect(function()
     end)
 end)
 
--- Fly controls
 local flyConnection
 local function updateFly()
     if not settings.flyEnabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
@@ -787,7 +1087,6 @@ end
 
 flyConnection = RunService.Heartbeat:Connect(updateFly)
 
--- Toggle menu with hotkey
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == settings.hotkey then
@@ -800,13 +1099,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Update movement speed when character spawns
 player.CharacterAdded:Connect(function(character)
     character:WaitForChild("Humanoid")
     updateMovementSpeed()
 end)
 
--- Initial setup
 updateTheme()
 if player.Character then
     updateMovementSpeed()
