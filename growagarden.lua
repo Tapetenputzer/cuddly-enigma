@@ -1,4 +1,4 @@
--- Grow a Garden Script - Professional Edition
+-- Grow a Garden Script - Professional Edition with Auto Seed Purchase
 -- Made by massivendurchfall
 
 local Players = game:GetService("Players")
@@ -12,6 +12,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local sellInventoryEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Sell_Inventory")
 local sellItemEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Sell_Item")
+local buySeedEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("BuySeedStock")
 
 local SELL_POSITION = Vector3.new(86, 2, 0)
 
@@ -22,7 +23,34 @@ local settings = {
     flyEnabled = false,
     autoCollectPlant = false,
     autoSellInventory = false,
-    antiAFK = false
+    antiAFK = false,
+    autoBuySeeds = false,
+    selectedSeed = "Apple",
+    buyInterval = 5
+}
+
+-- Seed list (expanded based on the screenshot)
+local availableSeeds = {
+    "Apple",
+    "Bamboo", 
+    "Beanstalk",
+    "Blueberry",
+    "BurningBud",
+    "Carrot",
+    "Cherry",
+    "Coconut",
+    "Corn",
+    "Cotton",
+    "Grape",
+    "Lemon",
+    "Orange",
+    "Pear",
+    "Potato",
+    "Pumpkin",
+    "Strawberry",
+    "Tomato",
+    "Watermelon",
+    "Wheat"
 }
 
 -- Modern Professional Themes
@@ -65,6 +93,7 @@ local collectDelay = 1
 local autoSellConnection = nil
 local autoSellTimer = 0
 local antiAFKConnection = nil
+local autoBuyConnection = nil
 local waitingForHotkey = false
 
 -- Create modern GUI
@@ -76,8 +105,8 @@ screenGui.Parent = playerGui
 -- Main container with modern styling
 local mainContainer = Instance.new("Frame")
 mainContainer.Name = "MainContainer"
-mainContainer.Size = UDim2.new(0, 480, 0, 600)
-mainContainer.Position = UDim2.new(0.5, -240, 0.5, -300)
+mainContainer.Size = UDim2.new(0, 480, 0, 680)
+mainContainer.Position = UDim2.new(0.5, -240, 0.5, -340)
 mainContainer.BackgroundColor3 = themes[settings.theme].primary
 mainContainer.BorderSizePixel = 0
 mainContainer.ClipsDescendants = true
@@ -179,6 +208,7 @@ local tabs = {
     {name = "Player", icon = "👤"},
     {name = "Remote", icon = "🔧"},
     {name = "AutoFarm", icon = "🌱"},
+    {name = "AutoBuy", icon = "🛒"},
     {name = "Settings", icon = "⚙️"}
 }
 
@@ -189,14 +219,14 @@ local currentTab = "Player"
 for i, tab in ipairs(tabs) do
     local tabButton = Instance.new("TextButton")
     tabButton.Name = tab.name .. "Tab"
-    tabButton.Size = UDim2.new(0.25, -3, 1, -16)
-    tabButton.Position = UDim2.new((i-1) * 0.25, 2, 0, 8)
+    tabButton.Size = UDim2.new(0.2, -2, 1, -16)
+    tabButton.Position = UDim2.new((i-1) * 0.2, 1, 0, 8)
     tabButton.BackgroundColor3 = tab.name == currentTab and themes[settings.theme].accent or Color3.fromRGB(0, 0, 0, 0)
     tabButton.BackgroundTransparency = tab.name == currentTab and 0 or 1
     tabButton.BorderSizePixel = 0
     tabButton.Text = tab.icon .. " " .. tab.name
     tabButton.TextColor3 = tab.name == currentTab and Color3.fromRGB(255, 255, 255) or themes[settings.theme].textSecondary
-    tabButton.TextSize = 14
+    tabButton.TextSize = 12
     tabButton.Font = Enum.Font.GothamSemibold
     tabButton.Parent = tabContainer
     
@@ -224,10 +254,10 @@ for i, tab in ipairs(tabs) do
 end
 
 -- Helper function to create modern cards
-local function createCard(parent, title, yPos)
+local function createCard(parent, title, yPos, height)
     local card = Instance.new("Frame")
     card.Name = title .. "Card"
-    card.Size = UDim2.new(1, -32, 0, 120)
+    card.Size = UDim2.new(1, -32, 0, height or 120)
     card.Position = UDim2.new(0, 16, 0, yPos)
     card.BackgroundColor3 = themes[settings.theme].secondary
     card.BorderSizePixel = 0
@@ -331,6 +361,131 @@ local function createModernToggle(parent, text, position, isOn, onColor, offColo
     buttonCorner.Parent = toggleButton
     
     return container, toggleBg, toggleButton
+end
+
+-- Helper function to create modern dropdown
+local function createModernDropdown(parent, text, items, selectedItem, position)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -32, 0, 48)
+    container.Position = position
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -200, 1, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = themes[settings.theme].text
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.Parent = container
+    
+    local dropdown = Instance.new("TextButton")
+    dropdown.Size = UDim2.new(0, 180, 0, 36)
+    dropdown.Position = UDim2.new(1, -180, 0.5, -18)
+    dropdown.BackgroundColor3 = themes[settings.theme].tertiary
+    dropdown.BorderSizePixel = 0
+    dropdown.Text = selectedItem .. " ▼"
+    dropdown.TextColor3 = themes[settings.theme].text
+    dropdown.TextSize = 12
+    dropdown.Font = Enum.Font.Gotham
+    dropdown.Parent = container
+    
+    local dropdownCorner = Instance.new("UICorner")
+    dropdownCorner.CornerRadius = UDim.new(0, 8)
+    dropdownCorner.Parent = dropdown
+    
+    -- Create dropdown menu as a child of the main ScreenGui for maximum Z-index
+    local dropdownMenu = Instance.new("Frame")
+    dropdownMenu.Size = UDim2.new(0, 180, 0, math.min(#items * 32, 200)) -- Limit height for many items
+    dropdownMenu.BackgroundColor3 = themes[settings.theme].secondary
+    dropdownMenu.BorderSizePixel = 0
+    dropdownMenu.Visible = false
+    dropdownMenu.ZIndex = 50  -- Very high Z-Index
+    dropdownMenu.Parent = screenGui -- Parent to main ScreenGui instead of dropdown
+    
+    local menuCorner = Instance.new("UICorner")
+    menuCorner.CornerRadius = UDim.new(0, 8)
+    menuCorner.Parent = dropdownMenu
+    
+    -- Add scrolling frame for many items
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    scrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.ScrollBarThickness = 4
+    scrollingFrame.ScrollBarImageColor3 = themes[settings.theme].accent
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #items * 32)
+    scrollingFrame.ZIndex = 51
+    scrollingFrame.Parent = dropdownMenu
+    
+    -- Add a shadow for better visibility
+    local shadowFrame = Instance.new("Frame")
+    shadowFrame.Size = UDim2.new(1, 6, 1, 6)
+    shadowFrame.Position = UDim2.new(0, 3, 0, 3)
+    shadowFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadowFrame.BackgroundTransparency = 0.8
+    shadowFrame.ZIndex = 49
+    shadowFrame.Visible = false
+    shadowFrame.Parent = screenGui
+    
+    local shadowCorner = Instance.new("UICorner")
+    shadowCorner.CornerRadius = UDim.new(0, 8)
+    shadowCorner.Parent = shadowFrame
+    
+    -- Create item buttons with proper event handlers
+    local itemButtons = {}
+    for i, item in ipairs(items) do
+        local itemButton = Instance.new("TextButton")
+        itemButton.Size = UDim2.new(1, 0, 0, 32)
+        itemButton.Position = UDim2.new(0, 0, 0, (i-1) * 32)
+        itemButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0, 0)
+        itemButton.BackgroundTransparency = 1
+        itemButton.BorderSizePixel = 0
+        itemButton.Text = item
+        itemButton.TextColor3 = themes[settings.theme].text
+        itemButton.TextSize = 12
+        itemButton.Font = Enum.Font.Gotham
+        itemButton.ZIndex = 52  -- Higher than scrolling frame
+        itemButton.Parent = scrollingFrame
+        
+        itemButton.MouseEnter:Connect(function()
+            itemButton.BackgroundTransparency = 0
+            itemButton.BackgroundColor3 = themes[settings.theme].accent
+        end)
+        
+        itemButton.MouseLeave:Connect(function()
+            itemButton.BackgroundTransparency = 1
+        end)
+        
+        -- Store the button for later event connection
+        itemButtons[item] = itemButton
+    end
+    
+    -- Function to update dropdown position
+    local function updateDropdownPosition()
+        local dropdownAbsPos = dropdown.AbsolutePosition
+        local dropdownAbsSize = dropdown.AbsoluteSize
+        dropdownMenu.Position = UDim2.new(0, dropdownAbsPos.X, 0, dropdownAbsPos.Y + dropdownAbsSize.Y + 4)
+        shadowFrame.Position = UDim2.new(0, dropdownAbsPos.X + 3, 0, dropdownAbsPos.Y + dropdownAbsSize.Y + 7)
+    end
+    
+    dropdown.MouseButton1Click:Connect(function()
+        dropdownMenu.Visible = not dropdownMenu.Visible
+        shadowFrame.Visible = dropdownMenu.Visible
+        if dropdownMenu.Visible then
+            updateDropdownPosition()
+        end
+    end)
+    
+    -- Update position when parent moves
+    container.AncestryChanged:Connect(updateDropdownPosition)
+    
+    return container, dropdown, dropdownMenu, itemButtons, shadowFrame
 end
 
 -- Helper function to create modern sliders
@@ -455,6 +610,43 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = autoSellCard
 
+-- Build AutoBuy Tab
+local autoBuyFrame = tabFrames["AutoBuy"]
+
+-- Seed Selection Card
+local seedSelectionCard = createCard(autoBuyFrame, "Seed Selection", 16, 160)
+local seedDropdownContainer, seedDropdown, seedDropdownMenu, seedDropdownItems, seedDropdownShadow = createModernDropdown(
+    seedSelectionCard, "Selected Seed:", availableSeeds, settings.selectedSeed, UDim2.new(0, 16, 0, 48)
+)
+
+-- Buy interval slider
+local buyIntervalContainer, buyIntervalLabel, buyIntervalSliderBg, buyIntervalFill, buyIntervalHandle = createModernSlider(
+    seedSelectionCard, "Buy Interval (seconds)", settings.buyInterval, 1, 30, UDim2.new(0, 16, 0, 96)
+)
+
+-- Auto Buy Card
+local autoBuyCard = createCard(autoBuyFrame, "Auto Purchase", 192)
+local autoBuyContainer, autoBuyBg, autoBuyToggleButton = createModernToggle(
+    autoBuyCard, "Auto Buy Seeds", UDim2.new(0, 16, 0, 48), settings.autoBuySeeds
+)
+
+-- Manual buy button
+local manualBuyBtn = createModernButton(
+    autoBuyCard, "🛒 Buy " .. settings.selectedSeed, UDim2.new(0, 16, 0, 84), UDim2.new(0, 180, 0, 40), themes[settings.theme].warning
+)
+
+-- Buy status label
+local buyStatusLabel = Instance.new("TextLabel")
+buyStatusLabel.Size = UDim2.new(1, -32, 0, 20)
+buyStatusLabel.Position = UDim2.new(0, 212, 0, 94)
+buyStatusLabel.BackgroundTransparency = 1
+buyStatusLabel.Text = "Status: Ready"
+buyStatusLabel.TextColor3 = themes[settings.theme].textSecondary
+buyStatusLabel.TextSize = 12
+buyStatusLabel.Font = Enum.Font.Gotham
+buyStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+buyStatusLabel.Parent = autoBuyCard
+
 -- Build Settings Tab
 local settingsFrame = tabFrames["Settings"]
 
@@ -476,7 +668,7 @@ local aboutText = Instance.new("TextLabel")
 aboutText.Size = UDim2.new(1, -32, 1, -48)
 aboutText.Position = UDim2.new(0, 16, 0, 48)
 aboutText.BackgroundTransparency = 1
-aboutText.Text = "Grow a Garden Script v2.0\nAdvanced automation for farming\n\nMade with ❤️ by massivendurchfall"
+aboutText.Text = "Grow a Garden Script v2.1\nAdvanced automation for farming\nNow with Auto Seed Purchase!\n\nMade with ❤️ by massivendurchfall"
 aboutText.TextColor3 = themes[settings.theme].textSecondary
 aboutText.TextSize = 12
 aboutText.Font = Enum.Font.Gotham
@@ -484,17 +676,191 @@ aboutText.TextXAlignment = Enum.TextXAlignment.Left
 aboutText.TextYAlignment = Enum.TextYAlignment.Top
 aboutText.Parent = aboutCard
 
+-- Auto Buy Functions
+local function buySeed(seedName)
+    -- Try to fire the BuySeedStock remote event directly
+    local success, error = pcall(function()
+        -- Method 1: Fire with just the seed name
+        buySeedEvent:FireServer(seedName)
+        
+        -- Wait a bit to see if it worked
+        wait(0.1)
+        
+        -- Method 2: Try with additional parameters that might be expected
+        -- Some games require quantity or other parameters
+        buySeedEvent:FireServer(seedName, 1) -- Try with quantity 1
+        wait(0.1)
+        
+        -- Method 3: Try with different formatting
+        buySeedEvent:FireServer(seedName .. " Seed") -- Try with " Seed" suffix
+        wait(0.1)
+        
+        -- Method 4: Try with table format (some games use this)
+        buySeedEvent:FireServer({
+            seedType = seedName,
+            quantity = 1,
+            buyType = "sheckles" -- or "money" or "coins"
+        })
+        wait(0.1)
+        
+        -- Method 5: Try different parameter combinations
+        buySeedEvent:FireServer("sheckles", seedName, 1)
+        wait(0.1)
+        
+        buySeedEvent:FireServer(player, seedName)
+        wait(0.1)
+        
+        return true
+    end)
+    
+    if success then
+        buyStatusLabel.Text = "Status: Purchase request sent for " .. seedName
+        buyStatusLabel.TextColor3 = themes[settings.theme].success
+        print("Successfully sent purchase request for " .. seedName)
+        return true
+    else
+        buyStatusLabel.Text = "Status: Failed to send request for " .. seedName
+        buyStatusLabel.TextColor3 = themes[settings.theme].error
+        print("Failed to send purchase request for " .. seedName .. ": " .. tostring(error))
+        return false
+    end
+end
+
+-- Alternative function to try GUI method as backup
+local function buySeedGUI(seedName)
+    local seedShopGui = playerGui:FindFirstChild("Seed_Shop")
+    if not seedShopGui then
+        return false
+    end
+    
+    local frameContainer = seedShopGui:FindFirstChild("Frame")
+    if not frameContainer then return false end
+    
+    local scrollingFrame = frameContainer:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return false end
+    
+    local seedFrame = scrollingFrame:FindFirstChild(seedName)
+    if not seedFrame then return false end
+    
+    local innerFrame = seedFrame:FindFirstChild("Frame")
+    if not innerFrame then return false end
+    
+    local buyButton = innerFrame:FindFirstChild("Sheckles_Buy")
+    if not buyButton then return false end
+    
+    local success, error = pcall(function()
+        if buyButton:IsA("GuiButton") or buyButton:IsA("TextButton") or buyButton:IsA("ImageButton") then
+            local VirtualInputManager = game:GetService("VirtualInputManager")
+            
+            if buyButton.Visible and (buyButton.Active == nil or buyButton.Active == true) then
+                local buttonPos = buyButton.AbsolutePosition
+                local buttonSize = buyButton.AbsoluteSize
+                local clickX = buttonPos.X + buttonSize.X / 2
+                local clickY = buttonPos.Y + buttonSize.Y / 2
+                
+                VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, true, game, 1)
+                wait(0.05)
+                VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, false, game, 1)
+                return true
+            end
+        end
+        
+        if buyButton.MouseButton1Click then
+            local connections = getconnections(buyButton.MouseButton1Click)
+            if #connections > 0 then
+                for _, connection in pairs(connections) do
+                    connection:Fire()
+                end
+                return true
+            end
+        end
+        
+        return false
+    end)
+    
+    return success
+end
+
+-- Enhanced buy function that tries both methods
+local function buySeedEnhanced(seedName)
+    -- First try the professional Remote Event method
+    local remoteSuccess = buySeed(seedName)
+    
+    if remoteSuccess then
+        return true
+    end
+    
+    -- If remote method fails, try GUI method as backup
+    wait(0.5)
+    local guiSuccess = buySeedGUI(seedName)
+    
+    if guiSuccess then
+        buyStatusLabel.Text = "Status: GUI purchase successful for " .. seedName
+        buyStatusLabel.TextColor3 = themes[settings.theme].success
+        return true
+    else
+        buyStatusLabel.Text = "Status: All methods failed for " .. seedName
+        buyStatusLabel.TextColor3 = themes[settings.theme].error
+        return false
+    end
+end
+
+-- Enhanced auto buy system that works without shop being open
+local function autoBuyLoop()
+    while settings.autoBuySeeds do
+        if settings.selectedSeed and settings.selectedSeed ~= "" then
+            buyStatusLabel.Text = "Status: Auto-buying " .. settings.selectedSeed
+            buyStatusLabel.TextColor3 = themes[settings.theme].warning
+            
+            -- Direct remote event call - no need for shop to be open
+            local success = buySeedEnhanced(settings.selectedSeed)
+            
+            if success then
+                buyStatusLabel.Text = "Status: Auto-buy successful - " .. settings.selectedSeed
+                buyStatusLabel.TextColor3 = themes[settings.theme].success
+            else
+                buyStatusLabel.Text = "Status: Auto-buy failed - " .. settings.selectedSeed
+                buyStatusLabel.TextColor3 = themes[settings.theme].error
+            end
+            
+            -- Wait for the specified interval
+            wait(settings.buyInterval)
+        else
+            buyStatusLabel.Text = "Status: No seed selected"
+            buyStatusLabel.TextColor3 = themes[settings.theme].error
+            wait(1)
+        end
+        
+        wait(0.1) -- Small delay to prevent excessive server calls
+    end
+end
+
+local function startAutoBuy()
+    if autoBuyConnection then
+        task.cancel(autoBuyConnection)
+    end
+    
+    autoBuyConnection = task.spawn(autoBuyLoop)
+end
+
+local function stopAutoBuy()
+    if autoBuyConnection then
+        task.cancel(autoBuyConnection)
+        autoBuyConnection = nil
+    end
+    buyStatusLabel.Text = "Status: Stopped"
+    buyStatusLabel.TextColor3 = themes[settings.theme].textSecondary
+end
+
 -- Functions
 local function updateTheme()
     local theme = themes[settings.theme]
     
     -- Update main colors
     mainContainer.BackgroundColor3 = theme.primary
-    shadowFrame.BackgroundColor3 = theme.shadow
     titleBar.BackgroundColor3 = theme.secondary
     titleFix.BackgroundColor3 = theme.secondary
     titleLabel.TextColor3 = theme.text
-    subtitleLabel.TextColor3 = theme.textSecondary
     tabContainer.BackgroundColor3 = theme.tertiary
     
     -- Update all cards
@@ -590,6 +956,18 @@ for tabName, button in pairs(tabButtons) do
     end)
 end
 
+-- Seed dropdown handling - NOW WITH PROPER EVENT CONNECTIONS
+for seedName, itemButton in pairs(seedDropdownItems) do
+    itemButton.MouseButton1Click:Connect(function()
+        settings.selectedSeed = seedName
+        seedDropdown.Text = seedName .. " ▼"
+        seedDropdownMenu.Visible = false
+        seedDropdownShadow.Visible = false
+        manualBuyBtn.Text = "🛒 Buy " .. seedName
+        print("Selected seed changed to: " .. seedName)
+    end)
+end
+
 -- Speed slider
 local draggingSpeed = false
 speedHandle.InputBegan:Connect(function(input)
@@ -616,6 +994,34 @@ end)
 speedHandle.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         draggingSpeed = false
+    end
+end)
+
+-- Buy interval slider
+local draggingBuyInterval = false
+buyIntervalHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingBuyInterval = true
+    end
+end)
+
+buyIntervalHandle.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and draggingBuyInterval then
+        local mousePos = UserInputService:GetMouseLocation().X
+        local sliderPos = buyIntervalSliderBg.AbsolutePosition.X
+        local sliderSize = buyIntervalSliderBg.AbsoluteSize.X
+        local percentage = math.clamp((mousePos - sliderPos) / sliderSize, 0, 1)
+        
+        settings.buyInterval = math.floor(1 + (percentage * 29))
+        buyIntervalHandle.Position = UDim2.new(percentage, -10, 0, -7)
+        buyIntervalFill.Size = UDim2.new(percentage, 0, 1, 0)
+        buyIntervalLabel.Text = "Buy Interval (seconds): " .. settings.buyInterval
+    end
+end)
+
+buyIntervalHandle.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingBuyInterval = false
     end
 end)
 
@@ -666,6 +1072,19 @@ afkToggleButton.MouseButton1Click:Connect(function()
             task.cancel(antiAFKConnection)
             antiAFKConnection = nil
         end
+    end
+end)
+
+autoBuyToggleButton.MouseButton1Click:Connect(function()
+    settings.autoBuySeeds = not settings.autoBuySeeds
+    animateToggle(autoBuyBg, autoBuyToggleButton, settings.autoBuySeeds)
+    
+    if settings.autoBuySeeds then
+        buyStatusLabel.Text = "Status: Starting auto buy..."
+        buyStatusLabel.TextColor3 = themes[settings.theme].success
+        startAutoBuy()
+    else
+        stopAutoBuy()
     end
 end)
 
@@ -746,6 +1165,15 @@ seedShopBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+manualBuyBtn.MouseButton1Click:Connect(function()
+    if settings.selectedSeed and settings.selectedSeed ~= "" then
+        manualBuyBtn.Text = "🛒 Buying..."
+        local success = buySeedEnhanced(settings.selectedSeed)
+        wait(1)
+        manualBuyBtn.Text = "🛒 Buy " .. settings.selectedSeed
+    end
+end)
+
 themeBtn.MouseButton1Click:Connect(function()
     settings.theme = settings.theme == "Dark" and "Light" or "Dark"
     themeBtn.Text = "🎨 Theme: " .. settings.theme
@@ -797,7 +1225,7 @@ titleBar.InputEnded:Connect(function(input)
     end
 end)
 
--- Auto-farming functions
+-- Auto-farming functions (existing code remains the same)
 local function getAllPlants()
     local mainFarm = workspace:FindFirstChild("Farm")
     if not mainFarm then 
@@ -1092,7 +1520,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if screenGui.Enabled then
             mainContainer.Size = UDim2.new(0, 0, 0, 0)
             local openTween = TweenService:Create(mainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-                Size = UDim2.new(0, 480, 0, 600)
+                Size = UDim2.new(0, 480, 0, 680)
             })
             openTween:Play()
         end
@@ -1117,7 +1545,7 @@ mainContainer.Size = UDim2.new(0, 0, 0, 0)
 wait(0.1)
 
 local startupTween = TweenService:Create(mainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
-    Size = UDim2.new(0, 480, 0, 600)
+    Size = UDim2.new(0, 480, 0, 680)
 })
 
 startupTween:Play()
