@@ -72,7 +72,6 @@ local autoDeletePeelsActive, autoDeletePeelsThread = false, nil
 local autoCollectCoinsActive, autoCollectCoinsThread = false, nil
 local autoDeleteLockersActive, autoDeleteLockersThread = false, nil
 local autoKillActive, autoKillThread = false, nil
-local autoSolveValveActive, autoSolveValveThread = false, nil
 local antiKickConnection = nil
 
 local antiAfkConnection = nil
@@ -190,14 +189,14 @@ end
 local function createBillboard(text, isNametag)
     local billboard = Instance.new("BillboardGui")
     billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 150, 0, 50)
+    billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
 
     local textLabel = Instance.new("TextLabel")
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.BackgroundTransparency = 1
     textLabel.Text = text
-    textLabel.TextScaled = true
+    textLabel.TextSize = 14
     textLabel.Font = Enum.Font.GothamBold
     textLabel.TextColor3 = Color3.new(1, 1, 1)
     textLabel.TextStrokeTransparency = 0
@@ -679,36 +678,6 @@ local function autoDeleteLockersFunc()
     end
 end
 
-local function autoSolveValveFunc()
-    while autoSolveValveActive do
-        pcall(function()
-            local gameKeeper = workspace:FindFirstChild("GameKeeper")
-            if gameKeeper then
-                local puzzles = gameKeeper:FindFirstChild("Puzzles")
-                if puzzles then
-                    -- Finde alle ValvePuzzle Instanzen und klicke sie schnell
-                    for _, child in pairs(puzzles:GetChildren()) do
-                        if child.Name == "ValvePuzzle" and child:FindFirstChild("Buttons") then
-                            local buttons = child.Buttons
-                            local valveButton = buttons:FindFirstChild("ValveButton")
-                            if valveButton and valveButton:FindFirstChild("ClickDetector") then
-                                -- Schneller Autoclicker - klicke mehrmals schnell hintereinander
-                                for i = 1, 5 do
-                                    if not autoSolveValveActive then break end
-                                    fireclickdetector(valveButton.ClickDetector)
-                                    task.wait(0.05) -- Sehr kurze Pause zwischen schnellen Klicks
-                                end
-                                task.wait(0.1) -- Kurze Pause zwischen verschiedenen Ventilen
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-        task.wait(0.5) -- Kurze Pause bevor der nächste Durchgang beginnt
-    end
-end
-
 local function autoKillFunc()
     while autoKillActive do
         pcall(function()
@@ -1059,31 +1028,6 @@ AutoSection:AddToggle("AutoDeleteLockers", {
         else
             if autoDeleteLockersThread then task.cancel(autoDeleteLockersThread) end
             autoDeleteLockersThread = nil
-        end
-    end
-})
-
-AutoSection:AddToggle("AutoSolveValve", {
-    Title = "Auto Solve Valve",
-    Default = false,
-    Callback = function(state)
-        autoSolveValveActive = state
-        if state then
-            if autoSolveValveThread then task.cancel(autoSolveValveThread) end
-            autoSolveValveThread = task.spawn(autoSolveValveFunc)
-            Fluent:Notify({
-                Title = "Auto Solve Valve",
-                Content = "Auto valve solving enabled",
-                Duration = 3
-            })
-        else
-            if autoSolveValveThread then task.cancel(autoSolveValveThread) end
-            autoSolveValveThread = nil
-            Fluent:Notify({
-                Title = "Auto Solve Valve",
-                Content = "Auto valve solving disabled",
-                Duration = 3
-            })
         end
     end
 })
@@ -1451,7 +1395,7 @@ end)
 
 Fluent:Notify({
     Title = "Banana Eats Script",
-    Content = "Script erfolgreich geladen!",
+    Content = "Script loaded successfully!",
     Duration = 4
 })
 
