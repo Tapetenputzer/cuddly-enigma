@@ -483,48 +483,24 @@ local function findPlayerByName(name)
     return nil
 end
 
--- Verbesserte ESP-Funktionen mit viereckigen Blöcken
+-- Verbesserte ESP-Funktionen mit direkten Character-Highlights
 local function createChamsBox(character)
-    if not character or character:FindFirstChild("ESP_ChamsBox") then return end
+    if not character or character:FindFirstChild("ESP_Highlight") then return end
     
-    -- Erstelle einen unsichtbaren Part als Container
-    local chamsBox = Instance.new("Part")
-    chamsBox.Name = "ESP_ChamsBox"
-    chamsBox.Size = Vector3.new(4, 6, 1.5) -- Größe angepasst für Spielermodell
-    chamsBox.Anchored = true
-    chamsBox.CanCollide = false
-    chamsBox.Transparency = 1 -- Unsichtbar
-    chamsBox.Parent = character
-    
-    -- Erstelle das Highlight für den Chams-Effekt
+    -- Erstelle das Highlight direkt für den ganzen Character
     local highlight = Instance.new("Highlight")
     highlight.Name = "ESP_Highlight"
-    highlight.Adornee = chamsBox
+    highlight.Adornee = character
     highlight.FillColor = Color3.fromRGB(255, 100, 100) -- Rot
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- Weiß
-    highlight.FillTransparency = 0.3
+    highlight.FillTransparency = 0.4
     highlight.OutlineTransparency = 0
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = workspace -- Parent zu workspace für bessere Sichtbarkeit
+    highlight.Parent = character
     
-    -- Position Update Connection
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if character.Parent and character:FindFirstChild("HumanoidRootPart") then
-            local rootPart = character.HumanoidRootPart
-            chamsBox.CFrame = rootPart.CFrame
-        else
-            connection:Disconnect()
-            if chamsBox.Parent then
-                chamsBox:Destroy()
-            end
-        end
-    end)
-    
-    table.insert(espHighlights, chamsBox)
     table.insert(espHighlights, highlight)
     
-    return chamsBox
+    return highlight
 end
 
 local function createSelectionBox(character)
@@ -548,18 +524,29 @@ local function createSelectionBox(character)
 end
 
 local function addESPToPlayer(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then return end
+    if not targetPlayer or not targetPlayer.Character then 
+        print("Kein Character für ESP:", targetPlayer and targetPlayer.Name or "unbekannt")
+        return 
+    end
     
     local character = targetPlayer.Character
     local humanoid = character:FindFirstChild("Humanoid")
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     
-    if not humanoidRootPart then return end
+    if not humanoidRootPart then 
+        print("Kein HumanoidRootPart für:", targetPlayer.Name)
+        return 
+    end
     
     -- Prüfe ob bereits ESP vorhanden ist
-    if character:FindFirstChild("ESP_ChamsBox") then return end
+    if character:FindFirstChild("ESP_Highlight") then 
+        print("ESP bereits vorhanden für:", targetPlayer.Name)
+        return 
+    end
     
-    -- Erstelle Chams Box (Hauptfeature)
+    print("Erstelle ESP für:", targetPlayer.Name)
+    
+    -- Erstelle Chams Highlight (Hauptfeature)
     createChamsBox(character)
     
     -- Erstelle zusätzliche SelectionBox für bessere Sichtbarkeit
@@ -633,6 +620,8 @@ local function addESPToPlayer(targetPlayer)
         
         table.insert(espHighlights, distanceGui)
     end
+    
+    print("ESP erfolgreich erstellt für:", targetPlayer.Name)
 end
 
 local function removeAllESP()
@@ -648,7 +637,7 @@ local function removeAllESP()
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
             -- Entferne Character ESP Elements
-            local elementsToRemove = {"ESP_ChamsBox", "ESP_SelectionBox"}
+            local elementsToRemove = {"ESP_Highlight", "ESP_SelectionBox"}
             for _, elementName in pairs(elementsToRemove) do
                 local element = p.Character:FindFirstChild(elementName)
                 if element then
@@ -667,7 +656,7 @@ local function removeAllESP()
     
     -- Entferne alle Highlights aus workspace
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj.Name == "ESP_Highlight" then
+        if obj.Name == "ESP_Highlight" and obj:IsA("Highlight") then
             obj:Destroy()
         end
     end
@@ -678,14 +667,28 @@ local function toggleESP()
     updateToggleAppearance(espToggle, espKnob, espEnabled)
     
     if espEnabled then
-        -- Warte kurz und füge dann ESP zu allen Spielern hinzu
-        wait(0.1)
+        print("ESP aktiviert - Füge ESP zu allen Spielern hinzu")
+        -- Sofort ESP zu allen existierenden Spielern hinzufügen
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Character then
-                addESPToPlayer(p)
+            if p ~= player then
+                print("Versuche ESP für Spieler:", p.Name)
+                if p.Character then
+                    print("Character gefunden für:", p.Name)
+                    addESPToPlayer(p)
+                else
+                    print("Kein Character für:", p.Name)
+                    -- Warte auf Character wenn noch nicht geladen
+                    spawn(function()
+                        p.CharacterAdded:Wait()
+                        wait(0.5) -- Kurz warten bis Character vollständig geladen
+                        if espEnabled then
+                            print("Character geladen für:", p.Name, "- Füge ESP hinzu")
+                            addESPToPlayer(p)
+                        end
+                    end)
+                end
             end
         end
-        print("ESP aktiviert - Chams Boxen erstellt")
     else
         removeAllESP()
         print("ESP deaktiviert")
@@ -978,15 +981,22 @@ end)
 
 -- Player events - Verbesserte ESP-Behandlung
 Players.PlayerAdded:Connect(function(newPlayer)
+    print("Neuer Spieler beigetreten:", newPlayer.Name)
     if espEnabled then
         newPlayer.CharacterAdded:Connect(function(character)
-            wait(1) -- Warte bis Charakter vollständig geladen ist
-            addESPToPlayer(newPlayer)
+            print("Character geladen für neuen Spieler:", newPlayer.Name)
+            wait(0.5) -- Warte bis Charakter vollständig geladen ist
+            if espEnabled then
+                addESPToPlayer(newPlayer)
+            end
         end)
         
         if newPlayer.Character then
-            wait(1)
-            addESPToPlayer(newPlayer)
+            print("Character bereits vorhanden für:", newPlayer.Name)
+            wait(0.5)
+            if espEnabled then
+                addESPToPlayer(newPlayer)
+            end
         end
     end
 end)
@@ -1034,18 +1044,23 @@ end)
 -- Handle character respawns for ESP
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= player then
+        print("Stelle CharacterAdded Connection für:", p.Name)
         p.CharacterAdded:Connect(function(character)
             if espEnabled then
-                wait(1) -- Warte bis Charakter vollständig geladen ist
+                print("Character respawned für:", p.Name)
+                wait(0.5) -- Warte bis Charakter vollständig geladen ist
                 addESPToPlayer(p)
             end
         end)
         
         -- Add ESP to existing characters
         if p.Character and espEnabled then
+            print("Füge ESP zu existierendem Character hinzu:", p.Name)
             spawn(function()
-                wait(1)
-                addESPToPlayer(p)
+                wait(0.5)
+                if espEnabled then
+                    addESPToPlayer(p)
+                end
             end)
         end
     end
