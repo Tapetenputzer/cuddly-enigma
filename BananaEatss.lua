@@ -60,6 +60,11 @@ local flyActive = false
 local flySpeed = 50
 local flyBodyVelocity, flyBodyGyro, flyConnection = nil, nil, nil
 
+-- Noclip variables
+local noclipActive = false
+local noclipConnection = nil
+local noclipParts = {}
+
 local fullbrightActive = false
 local noFogActive, noFogLoop = false, nil
 
@@ -67,6 +72,7 @@ local autoDeletePeelsActive, autoDeletePeelsThread = false, nil
 local autoCollectCoinsActive, autoCollectCoinsThread = false, nil
 local autoDeleteLockersActive, autoDeleteLockersThread = false, nil
 local autoKillActive, autoKillThread = false, nil
+local autoSolveValveActive, autoSolveValveThread = false, nil
 local antiKickConnection = nil
 
 local antiAfkConnection = nil
@@ -129,6 +135,56 @@ local function disableSunRays()
         sunRaysEffect:Destroy()
         sunRaysEffect = nil
     end
+end
+
+-- Noclip functions
+local function enableNoclip()
+    if noclipActive then return end
+    noclipActive = true
+    
+    local function noclipLoop()
+        local character = Players.LocalPlayer.Character
+        if character then
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    noclipParts[part] = true
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+    
+    noclipConnection = RunService.Stepped:Connect(noclipLoop)
+    
+    Fluent:Notify({
+        Title = "Noclip",
+        Content = "Noclip enabled",
+        Duration = 3
+    })
+end
+
+local function disableNoclip()
+    if not noclipActive then return end
+    noclipActive = false
+    
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    
+    -- Restore collision for all parts that were modified
+    for part, _ in pairs(noclipParts) do
+        if part and part.Parent then
+            part.CanCollide = true
+        end
+    end
+    noclipParts = {}
+    
+    Fluent:Notify({
+        Title = "Noclip",
+        Content = "Noclip disabled",
+        Duration = 3
+    })
 end
 
 local function createBillboard(text, isNametag)
@@ -623,6 +679,36 @@ local function autoDeleteLockersFunc()
     end
 end
 
+local function autoSolveValveFunc()
+    while autoSolveValveActive do
+        pcall(function()
+            local gameKeeper = workspace:FindFirstChild("GameKeeper")
+            if gameKeeper then
+                local puzzles = gameKeeper:FindFirstChild("Puzzles")
+                if puzzles then
+                    -- Finde alle ValvePuzzle Instanzen und klicke sie schnell
+                    for _, child in pairs(puzzles:GetChildren()) do
+                        if child.Name == "ValvePuzzle" and child:FindFirstChild("Buttons") then
+                            local buttons = child.Buttons
+                            local valveButton = buttons:FindFirstChild("ValveButton")
+                            if valveButton and valveButton:FindFirstChild("ClickDetector") then
+                                -- Schneller Autoclicker - klicke mehrmals schnell hintereinander
+                                for i = 1, 5 do
+                                    if not autoSolveValveActive then break end
+                                    fireclickdetector(valveButton.ClickDetector)
+                                    task.wait(0.05) -- Sehr kurze Pause zwischen schnellen Klicks
+                                end
+                                task.wait(0.1) -- Kurze Pause zwischen verschiedenen Ventilen
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        task.wait(0.5) -- Kurze Pause bevor der nächste Durchgang beginnt
+    end
+end
+
 local function autoKillFunc()
     while autoKillActive do
         pcall(function()
@@ -829,9 +915,11 @@ ESPColorsSection:AddColorpicker("PuzzleObjectEspColor", {
     end
 })
 
-Tabs.Player:AddSlider("WalkSpeedSlider", {
+-- Player Tab with Noclip
+local PlayerMovementSection = Tabs.Player:AddSection("Movement")
+
+PlayerMovementSection:AddSlider("WalkSpeedSlider", {
     Title = "Walk Speed",
-    Description = "Adjust your walking speed",
     Default = 16,
     Min = 16,
     Max = 45,
@@ -863,9 +951,8 @@ Tabs.Player:AddSlider("WalkSpeedSlider", {
     end
 })
 
-Tabs.Player:AddButton({
+PlayerMovementSection:AddButton({
     Title = "Reset Speed",
-    Description = "Reset speed to default",
     Callback = function()
         currentSpeed = 16
         local char = Players.LocalPlayer.Character
@@ -879,7 +966,7 @@ Tabs.Player:AddButton({
     end
 })
 
-Tabs.Player:AddToggle("FlyToggle", {
+PlayerMovementSection:AddToggle("FlyToggle", {
     Title = "Fly (Local)",
     Default = false,
     Callback = function(state)
@@ -891,9 +978,8 @@ Tabs.Player:AddToggle("FlyToggle", {
     end
 })
 
-Tabs.Player:AddSlider("FlySpeedSlider", {
+PlayerMovementSection:AddSlider("FlySpeedSlider", {
     Title = "Fly Speed",
-    Description = "Adjust your flying speed",
     Default = 50,
     Min = 1,
     Max = 200,
@@ -903,7 +989,22 @@ Tabs.Player:AddSlider("FlySpeedSlider", {
     end
 })
 
-Tabs.Player:AddToggle("AntiAFKToggle", {
+-- Noclip Toggle hinzugefügt
+PlayerMovementSection:AddToggle("NoclipToggle", {
+    Title = "Noclip",
+    Default = false,
+    Callback = function(state)
+        if state then
+            enableNoclip()
+        else
+            disableNoclip()
+        end
+    end
+})
+
+local PlayerUtilitySection = Tabs.Player:AddSection("Utility")
+
+PlayerUtilitySection:AddToggle("AntiAFKToggle", {
     Title = "Anti-AFK",
     Default = false,
     Callback = function(state)
@@ -962,6 +1063,31 @@ AutoSection:AddToggle("AutoDeleteLockers", {
     end
 })
 
+AutoSection:AddToggle("AutoSolveValve", {
+    Title = "Auto Solve Valve",
+    Default = false,
+    Callback = function(state)
+        autoSolveValveActive = state
+        if state then
+            if autoSolveValveThread then task.cancel(autoSolveValveThread) end
+            autoSolveValveThread = task.spawn(autoSolveValveFunc)
+            Fluent:Notify({
+                Title = "Auto Solve Valve",
+                Content = "Auto valve solving enabled",
+                Duration = 3
+            })
+        else
+            if autoSolveValveThread then task.cancel(autoSolveValveThread) end
+            autoSolveValveThread = nil
+            Fluent:Notify({
+                Title = "Auto Solve Valve",
+                Content = "Auto valve solving disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
 AutoSection:AddToggle("AutoKill", {
     Title = "Auto Kill",
     Default = false,
@@ -993,7 +1119,6 @@ local VisualSection = Tabs.Visual
 
 VisualSection:AddToggle("FullbrightToggle", {
     Title = "Fullbright",
-    Description = "Makes everything bright",
     Default = false,
     Callback = function(state)
         fullbrightActive = state
@@ -1015,7 +1140,6 @@ VisualSection:AddToggle("FullbrightToggle", {
 
 VisualSection:AddToggle("NoFogToggle", {
     Title = "No Fog",
-    Description = "Removes all fog effects",
     Default = false,
     Callback = function(state)
         noFogActive = state
@@ -1033,7 +1157,6 @@ VisualSection:AddToggle("NoFogToggle", {
 
 VisualSection:AddToggle("ColorCorrectionToggle", {
     Title = "Color Correction",
-    Description = "Enhances game colors",
     Default = false,
     Callback = function(state)
         ccActive = state
@@ -1047,7 +1170,6 @@ VisualSection:AddToggle("ColorCorrectionToggle", {
 
 VisualSection:AddSlider("BrightnessSlider", {
     Title = "Brightness",
-    Description = "Adjust color brightness",
     Default = 0,
     Min = -1,
     Max = 1,
@@ -1062,7 +1184,6 @@ VisualSection:AddSlider("BrightnessSlider", {
 
 VisualSection:AddSlider("ContrastSlider", {
     Title = "Contrast",
-    Description = "Adjust color contrast",
     Default = 0,
     Min = -2,
     Max = 2,
@@ -1077,7 +1198,6 @@ VisualSection:AddSlider("ContrastSlider", {
 
 VisualSection:AddSlider("SaturationSlider", {
     Title = "Saturation",
-    Description = "Adjust color saturation",
     Default = 1,
     Min = 0,
     Max = 3,
@@ -1092,7 +1212,6 @@ VisualSection:AddSlider("SaturationSlider", {
 
 VisualSection:AddToggle("SunRaysToggle", {
     Title = "Sun Rays",
-    Description = "Adds atmospheric sun rays",
     Default = false,
     Callback = function(state)
         sunRaysActive = state
@@ -1106,7 +1225,6 @@ VisualSection:AddToggle("SunRaysToggle", {
 
 VisualSection:AddSlider("SunRaysIntensitySlider", {
     Title = "Sun Rays Intensity",
-    Description = "Adjust sun rays strength",
     Default = 0.3,
     Min = 0,
     Max = 1,
@@ -1123,7 +1241,6 @@ local LightingSection = Tabs.Visual:AddSection("Lighting Controls")
 
 LightingSection:AddSlider("ClockTimeSlider", {
     Title = "Time of Day",
-    Description = "Change game time",
     Default = 14,
     Min = 0,
     Max = 24,
@@ -1135,7 +1252,6 @@ LightingSection:AddSlider("ClockTimeSlider", {
 
 LightingSection:AddSlider("ExposureSlider", {
     Title = "Exposure",
-    Description = "Adjust lighting exposure",
     Default = 0,
     Min = -3,
     Max = 3,
@@ -1147,7 +1263,6 @@ LightingSection:AddSlider("ExposureSlider", {
 
 LightingSection:AddToggle("ShadowsToggle", {
     Title = "Shadows",
-    Description = "Enable/disable shadows",
     Default = true,
     Callback = function(state)
         Lighting.GlobalShadows = state
@@ -1158,7 +1273,6 @@ local UtilitySection = Tabs.Visual:AddSection("Utility")
 
 UtilitySection:AddButton({
     Title = "Reset All Visual",
-    Description = "Reset all visual settings to default",
     Callback = function()
         Lighting.Brightness = 1
         Lighting.ClockTime = 14
@@ -1303,21 +1417,11 @@ if isMobile then
     task.wait(2)
     createMobileGUIButton()
     setupChatCommands()
-    
-    Fluent:Notify({
-        Title = "Mobile Mode Detected",
-        Content = "Touch the 🎮 button or use /gui to toggle menu",
-        Duration = 8
-    })
 else
     setupChatCommands()
-    Fluent:Notify({
-        Title = "Desktop Mode",
-        Content = "Use Left Ctrl or /gui to toggle menu",
-        Duration = 5
-    })
 end
 
+-- Character respawn handling including noclip
 Players.LocalPlayer.CharacterAdded:Connect(function(character)
     character:WaitForChild("HumanoidRootPart")
     task.wait(0.5)
@@ -1335,13 +1439,20 @@ Players.LocalPlayer.CharacterAdded:Connect(function(character)
         task.wait(0.5)
         enableFly()
     end
+    
+    -- Re-enable noclip after respawn
+    if noclipActive then
+        task.wait(0.5)
+        disableNoclip()
+        task.wait(0.5)
+        enableNoclip()
+    end
 end)
 
 Fluent:Notify({
-    Title = "Massivendurchfall",
-    Content = "Script Loaded Successfully!",
-    Duration = 5
+    Title = "Banana Eats Script",
+    Content = "Script erfolgreich geladen!",
+    Duration = 4
 })
 
 Window:SelectTab(1)
-print("Banana Eats Script - Enhanced Version Loaded!")
