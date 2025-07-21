@@ -1,5 +1,5 @@
--- Grow a Garden Script - Professional Edition with Auto Seed Purchase
--- Made by massivendurchfall
+-- Grow a Garden Script - Professional Edition with Multi-Seed Auto Purchase
+-- Made by massivendurchfall - Enhanced with Multiple Seed Selection
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,8 +25,10 @@ local settings = {
     autoSellInventory = false,
     antiAFK = false,
     autoBuySeeds = false,
-    selectedSeed = "Apple",
-    buyInterval = 5
+    selectedSeeds = {"Apple"}, -- Now supports multiple seeds
+    buyInterval = 5,
+    randomizeOrder = false, -- New: randomize seed purchase order
+    buyMode = "Sequential" -- Sequential, Random, All-at-once
 }
 
 -- Seed list (expanded based on the screenshot)
@@ -67,7 +69,8 @@ local themes = {
         warning = Color3.fromRGB(234, 179, 8),
         error = Color3.fromRGB(239, 68, 68),
         border = Color3.fromRGB(55, 55, 60),
-        shadow = Color3.fromRGB(0, 0, 0)
+        shadow = Color3.fromRGB(0, 0, 0),
+        selected = Color3.fromRGB(34, 197, 94)
     },
     Light = {
         primary = Color3.fromRGB(255, 255, 255),
@@ -81,7 +84,8 @@ local themes = {
         warning = Color3.fromRGB(234, 179, 8),
         error = Color3.fromRGB(239, 68, 68),
         border = Color3.fromRGB(226, 232, 240),
-        shadow = Color3.fromRGB(0, 0, 0)
+        shadow = Color3.fromRGB(0, 0, 0),
+        selected = Color3.fromRGB(34, 197, 94)
     }
 }
 
@@ -95,6 +99,7 @@ local autoSellTimer = 0
 local antiAFKConnection = nil
 local autoBuyConnection = nil
 local waitingForHotkey = false
+local currentSeedIndex = 1 -- For sequential buying
 
 -- Create modern GUI
 local screenGui = Instance.new("ScreenGui")
@@ -105,8 +110,8 @@ screenGui.Parent = playerGui
 -- Main container with modern styling
 local mainContainer = Instance.new("Frame")
 mainContainer.Name = "MainContainer"
-mainContainer.Size = UDim2.new(0, 480, 0, 680)
-mainContainer.Position = UDim2.new(0.5, -240, 0.5, -340)
+mainContainer.Size = UDim2.new(0, 520, 0, 720) -- Slightly larger for new features
+mainContainer.Position = UDim2.new(0.5, -260, 0.5, -360)
 mainContainer.BackgroundColor3 = themes[settings.theme].primary
 mainContainer.BorderSizePixel = 0
 mainContainer.ClipsDescendants = true
@@ -144,9 +149,9 @@ titleLabel.Name = "TitleLabel"
 titleLabel.Size = UDim2.new(1, -120, 1, 0)
 titleLabel.Position = UDim2.new(0, 24, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Grow a Garden Script"
+titleLabel.Text = "Grow a Garden Script v2.2"
 titleLabel.TextColor3 = themes[settings.theme].text
-titleLabel.TextSize = 20
+titleLabel.TextSize = 18
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -544,6 +549,133 @@ local function createModernSlider(parent, text, value, minVal, maxVal, position)
     return container, label, sliderBg, sliderFill, handle
 end
 
+-- NEW: Helper function to create seed selector with checkboxes
+local function createSeedSelector(parent, position)
+    local container = Instance.new("Frame")
+    container.Name = "SeedSelector"
+    container.Size = UDim2.new(1, -32, 0, 200)
+    container.Position = position
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, 0, 0, 24)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Selected Seeds:"
+    titleLabel.TextColor3 = themes[settings.theme].text
+    titleLabel.TextSize = 14
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = container
+    
+    -- Quick selection buttons
+    local selectAllBtn = createModernButton(
+        container, "Select All", UDim2.new(0, 0, 0, 30), UDim2.new(0, 80, 0, 24), themes[settings.theme].success
+    )
+    
+    local clearAllBtn = createModernButton(
+        container, "Clear All", UDim2.new(0, 88, 0, 30), UDim2.new(0, 80, 0, 24), themes[settings.theme].error
+    )
+    
+    -- Scrolling frame for seed checkboxes
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Size = UDim2.new(1, 0, 1, -60)
+    scrollingFrame.Position = UDim2.new(0, 0, 0, 60)
+    scrollingFrame.BackgroundColor3 = themes[settings.theme].tertiary
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.ScrollBarThickness = 4
+    scrollingFrame.ScrollBarImageColor3 = themes[settings.theme].accent
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, math.ceil(#availableSeeds / 2) * 32)
+    scrollingFrame.Parent = container
+    
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 8)
+    scrollCorner.Parent = scrollingFrame
+    
+    -- Create checkboxes for each seed
+    local seedCheckboxes = {}
+    local function createSeedCheckbox(seedName, index)
+        local row = math.floor((index - 1) / 2)
+        local col = (index - 1) % 2
+        
+        local checkboxContainer = Instance.new("Frame")
+        checkboxContainer.Size = UDim2.new(0.5, -4, 0, 32)
+        checkboxContainer.Position = UDim2.new(col * 0.5, col == 0 and 4 or 8, 0, row * 32)
+        checkboxContainer.BackgroundTransparency = 1
+        checkboxContainer.Parent = scrollingFrame
+        
+        local checkbox = Instance.new("TextButton")
+        checkbox.Size = UDim2.new(0, 20, 0, 20)
+        checkbox.Position = UDim2.new(0, 0, 0.5, -10)
+        checkbox.BackgroundColor3 = themes[settings.theme].secondary
+        checkbox.BorderSizePixel = 1
+        checkbox.BorderColor3 = themes[settings.theme].border
+        checkbox.Text = ""
+        checkbox.Parent = checkboxContainer
+        
+        local checkboxCorner = Instance.new("UICorner")
+        checkboxCorner.CornerRadius = UDim.new(0, 4)
+        checkboxCorner.Parent = checkbox
+        
+        local checkMark = Instance.new("TextLabel")
+        checkMark.Size = UDim2.new(1, 0, 1, 0)
+        checkMark.Position = UDim2.new(0, 0, 0, 0)
+        checkMark.BackgroundTransparency = 1
+        checkMark.Text = "✓"
+        checkMark.TextColor3 = Color3.fromRGB(255, 255, 255)
+        checkMark.TextSize = 14
+        checkMark.Font = Enum.Font.GothamBold
+        checkMark.TextXAlignment = Enum.TextXAlignment.Center
+        checkMark.TextYAlignment = Enum.TextYAlignment.Center
+        checkMark.Visible = false
+        checkMark.Parent = checkbox
+        
+        local seedLabel = Instance.new("TextLabel")
+        seedLabel.Size = UDim2.new(1, -28, 1, 0)
+        seedLabel.Position = UDim2.new(0, 28, 0, 0)
+        seedLabel.BackgroundTransparency = 1
+        seedLabel.Text = seedName
+        seedLabel.TextColor3 = themes[settings.theme].text
+        seedLabel.TextSize = 12
+        seedLabel.Font = Enum.Font.Gotham
+        seedLabel.TextXAlignment = Enum.TextXAlignment.Left
+        seedLabel.TextYAlignment = Enum.TextYAlignment.Center
+        seedLabel.Parent = checkboxContainer
+        
+        -- Check if seed is initially selected
+        local isSelected = false
+        for _, selectedSeed in ipairs(settings.selectedSeeds) do
+            if selectedSeed == seedName then
+                isSelected = true
+                break
+            end
+        end
+        
+        if isSelected then
+            checkbox.BackgroundColor3 = themes[settings.theme].selected
+            checkMark.Visible = true
+        end
+        
+        seedCheckboxes[seedName] = {
+            container = checkboxContainer,
+            checkbox = checkbox,
+            checkMark = checkMark,
+            label = seedLabel,
+            isSelected = isSelected
+        }
+        
+        return checkboxContainer, checkbox, checkMark
+    end
+    
+    -- Create all seed checkboxes
+    for i, seedName in ipairs(availableSeeds) do
+        createSeedCheckbox(seedName, i)
+    end
+    
+    return container, scrollingFrame, seedCheckboxes, selectAllBtn, clearAllBtn
+end
+
 -- Build Player Tab
 local playerFrame = tabFrames["Player"]
 
@@ -613,39 +745,59 @@ statusLabel.Parent = autoSellCard
 -- Build AutoBuy Tab
 local autoBuyFrame = tabFrames["AutoBuy"]
 
--- Seed Selection Card
-local seedSelectionCard = createCard(autoBuyFrame, "Seed Selection", 16, 160)
-local seedDropdownContainer, seedDropdown, seedDropdownMenu, seedDropdownItems, seedDropdownShadow = createModernDropdown(
-    seedSelectionCard, "Selected Seed:", availableSeeds, settings.selectedSeed, UDim2.new(0, 16, 0, 48)
+-- Multi-Seed Selection Card (NEW)
+local multiSeedCard = createCard(autoBuyFrame, "Multi-Seed Selection", 16, 240)
+local seedSelectorContainer, seedScrollFrame, seedCheckboxes, selectAllBtn, clearAllBtn = createSeedSelector(
+    multiSeedCard, UDim2.new(0, 16, 0, 48)
+)
+
+-- Buy Mode Card (NEW)
+local buyModeCard = createCard(autoBuyFrame, "Purchase Settings", 272, 160)
+
+-- Buy mode dropdown
+local buyModeContainer, buyModeDropdown, buyModeMenu, buyModeItems, buyModeShadow = createModernDropdown(
+    buyModeCard, "Buy Mode:", {"Sequential", "Random", "All-at-once"}, settings.buyMode, UDim2.new(0, 16, 0, 48)
 )
 
 -- Buy interval slider
 local buyIntervalContainer, buyIntervalLabel, buyIntervalSliderBg, buyIntervalFill, buyIntervalHandle = createModernSlider(
-    seedSelectionCard, "Buy Interval (seconds)", settings.buyInterval, 1, 30, UDim2.new(0, 16, 0, 96)
+    buyModeCard, "Buy Interval (seconds)", settings.buyInterval, 1, 30, UDim2.new(0, 16, 0, 96)
 )
 
 -- Auto Buy Card
-local autoBuyCard = createCard(autoBuyFrame, "Auto Purchase", 192)
+local autoBuyCard = createCard(autoBuyFrame, "Auto Purchase Control", 448)
 local autoBuyContainer, autoBuyBg, autoBuyToggleButton = createModernToggle(
     autoBuyCard, "Auto Buy Seeds", UDim2.new(0, 16, 0, 48), settings.autoBuySeeds
 )
 
--- Manual buy button
-local manualBuyBtn = createModernButton(
-    autoBuyCard, "🛒 Buy " .. settings.selectedSeed, UDim2.new(0, 16, 0, 84), UDim2.new(0, 180, 0, 40), themes[settings.theme].warning
+-- Manual buy buttons
+local buySelectedBtn = createModernButton(
+    autoBuyCard, "🛒 Buy Selected Seeds", UDim2.new(0, 16, 0, 84), UDim2.new(0, 200, 0, 40), themes[settings.theme].warning
 )
 
 -- Buy status label
 local buyStatusLabel = Instance.new("TextLabel")
 buyStatusLabel.Size = UDim2.new(1, -32, 0, 20)
-buyStatusLabel.Position = UDim2.new(0, 212, 0, 94)
+buyStatusLabel.Position = UDim2.new(0, 16, 0, 132)
 buyStatusLabel.BackgroundTransparency = 1
-buyStatusLabel.Text = "Status: Ready"
+buyStatusLabel.Text = "Status: Ready - " .. #settings.selectedSeeds .. " seeds selected"
 buyStatusLabel.TextColor3 = themes[settings.theme].textSecondary
 buyStatusLabel.TextSize = 12
 buyStatusLabel.Font = Enum.Font.Gotham
 buyStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 buyStatusLabel.Parent = autoBuyCard
+
+-- Current seed indicator (for sequential mode)
+local currentSeedLabel = Instance.new("TextLabel")
+currentSeedLabel.Size = UDim2.new(1, -32, 0, 20)
+currentSeedLabel.Position = UDim2.new(0, 16, 0, 152)
+currentSeedLabel.BackgroundTransparency = 1
+currentSeedLabel.Text = "Next: " .. (settings.selectedSeeds[1] or "None")
+currentSeedLabel.TextColor3 = themes[settings.theme].textSecondary
+currentSeedLabel.TextSize = 10
+currentSeedLabel.Font = Enum.Font.Gotham
+currentSeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+currentSeedLabel.Parent = autoBuyCard
 
 -- Build Settings Tab
 local settingsFrame = tabFrames["Settings"]
@@ -668,7 +820,7 @@ local aboutText = Instance.new("TextLabel")
 aboutText.Size = UDim2.new(1, -32, 1, -48)
 aboutText.Position = UDim2.new(0, 16, 0, 48)
 aboutText.BackgroundTransparency = 1
-aboutText.Text = "Grow a Garden Script v2.1\nAdvanced automation for farming\nNow with Auto Seed Purchase!\n\nMade with ❤️ by massivendurchfall"
+aboutText.Text = "Grow a Garden Script v2.2\nAdvanced automation for farming\nNow with Multi-Seed Auto Purchase!\n\nFeatures:\n• Multiple seed selection\n• 3 different buy modes\n• Smart sequential/random buying\n\nMade with ❤️ by massivendurchfall"
 aboutText.TextColor3 = themes[settings.theme].textSecondary
 aboutText.TextSize = 12
 aboutText.Font = Enum.Font.Gotham
@@ -676,30 +828,26 @@ aboutText.TextXAlignment = Enum.TextXAlignment.Left
 aboutText.TextYAlignment = Enum.TextYAlignment.Top
 aboutText.Parent = aboutCard
 
--- Auto Buy Functions
+-- Enhanced Auto Buy Functions
 local function buySeed(seedName)
-    -- Try to fire the BuySeedStock remote event directly
     local success, error = pcall(function()
         -- Method 1: Fire with just the seed name
         buySeedEvent:FireServer(seedName)
-        
-        -- Wait a bit to see if it worked
         wait(0.1)
         
-        -- Method 2: Try with additional parameters that might be expected
-        -- Some games require quantity or other parameters
-        buySeedEvent:FireServer(seedName, 1) -- Try with quantity 1
+        -- Method 2: Try with additional parameters
+        buySeedEvent:FireServer(seedName, 1)
         wait(0.1)
         
         -- Method 3: Try with different formatting
-        buySeedEvent:FireServer(seedName .. " Seed") -- Try with " Seed" suffix
+        buySeedEvent:FireServer(seedName .. " Seed")
         wait(0.1)
         
-        -- Method 4: Try with table format (some games use this)
+        -- Method 4: Try with table format
         buySeedEvent:FireServer({
             seedType = seedName,
             quantity = 1,
-            buyType = "sheckles" -- or "money" or "coins"
+            buyType = "sheckles"
         })
         wait(0.1)
         
@@ -713,25 +861,12 @@ local function buySeed(seedName)
         return true
     end)
     
-    if success then
-        buyStatusLabel.Text = "Status: Purchase request sent for " .. seedName
-        buyStatusLabel.TextColor3 = themes[settings.theme].success
-        print("Successfully sent purchase request for " .. seedName)
-        return true
-    else
-        buyStatusLabel.Text = "Status: Failed to send request for " .. seedName
-        buyStatusLabel.TextColor3 = themes[settings.theme].error
-        print("Failed to send purchase request for " .. seedName .. ": " .. tostring(error))
-        return false
-    end
+    return success
 end
 
--- Alternative function to try GUI method as backup
 local function buySeedGUI(seedName)
     local seedShopGui = playerGui:FindFirstChild("Seed_Shop")
-    if not seedShopGui then
-        return false
-    end
+    if not seedShopGui then return false end
     
     local frameContainer = seedShopGui:FindFirstChild("Frame")
     if not frameContainer then return false end
@@ -781,57 +916,100 @@ local function buySeedGUI(seedName)
     return success
 end
 
--- Enhanced buy function that tries both methods
 local function buySeedEnhanced(seedName)
-    -- First try the professional Remote Event method
     local remoteSuccess = buySeed(seedName)
     
     if remoteSuccess then
         return true
     end
     
-    -- If remote method fails, try GUI method as backup
     wait(0.5)
     local guiSuccess = buySeedGUI(seedName)
     
-    if guiSuccess then
-        buyStatusLabel.Text = "Status: GUI purchase successful for " .. seedName
-        buyStatusLabel.TextColor3 = themes[settings.theme].success
-        return true
-    else
-        buyStatusLabel.Text = "Status: All methods failed for " .. seedName
+    return guiSuccess
+end
+
+-- NEW: Multi-seed buying functions
+local function buyMultipleSeeds(mode)
+    if #settings.selectedSeeds == 0 then
+        buyStatusLabel.Text = "Status: No seeds selected"
         buyStatusLabel.TextColor3 = themes[settings.theme].error
         return false
     end
+    
+    local seedsToBuy = {}
+    
+    if mode == "Sequential" then
+        -- Buy one seed in order
+        if currentSeedIndex > #settings.selectedSeeds then
+            currentSeedIndex = 1
+        end
+        seedsToBuy = {settings.selectedSeeds[currentSeedIndex]}
+        currentSeedIndex = currentSeedIndex + 1
+        
+    elseif mode == "Random" then
+        -- Buy one random seed
+        local randomIndex = math.random(1, #settings.selectedSeeds)
+        seedsToBuy = {settings.selectedSeeds[randomIndex]}
+        
+    elseif mode == "All-at-once" then
+        -- Buy all selected seeds
+        seedsToBuy = settings.selectedSeeds
+    end
+    
+    local successCount = 0
+    local totalSeeds = #seedsToBuy
+    
+    for i, seedName in ipairs(seedsToBuy) do
+        buyStatusLabel.Text = "Status: Buying " .. seedName .. " (" .. i .. "/" .. totalSeeds .. ")"
+        buyStatusLabel.TextColor3 = themes[settings.theme].warning
+        
+        local success = buySeedEnhanced(seedName)
+        
+        if success then
+            successCount = successCount + 1
+            print("Successfully bought: " .. seedName)
+        else
+            print("Failed to buy: " .. seedName)
+        end
+        
+        -- Small delay between purchases
+        if i < totalSeeds then
+            wait(0.5)
+        end
+    end
+    
+    -- Update status
+    if successCount == totalSeeds then
+        buyStatusLabel.Text = "Status: Successfully bought " .. successCount .. "/" .. totalSeeds .. " seeds"
+        buyStatusLabel.TextColor3 = themes[settings.theme].success
+    else
+        buyStatusLabel.Text = "Status: Bought " .. successCount .. "/" .. totalSeeds .. " seeds (some failed)"
+        buyStatusLabel.TextColor3 = themes[settings.theme].warning
+    end
+    
+    -- Update current seed indicator for sequential mode
+    if mode == "Sequential" and #settings.selectedSeeds > 0 then
+        local nextIndex = currentSeedIndex > #settings.selectedSeeds and 1 or currentSeedIndex
+        currentSeedLabel.Text = "Next: " .. settings.selectedSeeds[nextIndex]
+    end
+    
+    return successCount > 0
 end
 
--- Enhanced auto buy system that works without shop being open
+-- Enhanced auto buy system
 local function autoBuyLoop()
     while settings.autoBuySeeds do
-        if settings.selectedSeed and settings.selectedSeed ~= "" then
-            buyStatusLabel.Text = "Status: Auto-buying " .. settings.selectedSeed
-            buyStatusLabel.TextColor3 = themes[settings.theme].warning
-            
-            -- Direct remote event call - no need for shop to be open
-            local success = buySeedEnhanced(settings.selectedSeed)
-            
-            if success then
-                buyStatusLabel.Text = "Status: Auto-buy successful - " .. settings.selectedSeed
-                buyStatusLabel.TextColor3 = themes[settings.theme].success
-            else
-                buyStatusLabel.Text = "Status: Auto-buy failed - " .. settings.selectedSeed
-                buyStatusLabel.TextColor3 = themes[settings.theme].error
-            end
-            
-            -- Wait for the specified interval
+        if #settings.selectedSeeds > 0 then
+            buyMultipleSeeds(settings.buyMode)
             wait(settings.buyInterval)
         else
-            buyStatusLabel.Text = "Status: No seed selected"
+            buyStatusLabel.Text = "Status: No seeds selected"
             buyStatusLabel.TextColor3 = themes[settings.theme].error
             wait(1)
         end
         
-        wait(0.1) -- Small delay to prevent excessive server calls
+        wait(0.1)
     end
 end
 
@@ -852,7 +1030,31 @@ local function stopAutoBuy()
     buyStatusLabel.TextColor3 = themes[settings.theme].textSecondary
 end
 
--- Functions
+-- Helper function to update selected seeds list
+local function updateSelectedSeedsList()
+    local newSelectedSeeds = {}
+    for seedName, checkboxData in pairs(seedCheckboxes) do
+        if checkboxData.isSelected then
+            table.insert(newSelectedSeeds, seedName)
+        end
+    end
+    settings.selectedSeeds = newSelectedSeeds
+    
+    -- Update status label
+    buyStatusLabel.Text = "Status: Ready - " .. #settings.selectedSeeds .. " seeds selected"
+    
+    -- Update current seed indicator
+    if #settings.selectedSeeds > 0 then
+        currentSeedLabel.Text = "Next: " .. settings.selectedSeeds[1]
+    else
+        currentSeedLabel.Text = "Next: None"
+    end
+    
+    -- Reset seed index
+    currentSeedIndex = 1
+end
+
+-- Functions (existing code remains the same for basic functionality)
 local function updateTheme()
     local theme = themes[settings.theme]
     
@@ -890,6 +1092,21 @@ local function updateTheme()
     
     -- Update theme button text
     themeBtn.Text = "🎨 Theme: " .. settings.theme
+    
+    -- Update seed selector colors
+    if seedScrollFrame then
+        seedScrollFrame.BackgroundColor3 = theme.tertiary
+    end
+    
+    for seedName, checkboxData in pairs(seedCheckboxes) do
+        checkboxData.label.TextColor3 = theme.text
+        checkboxData.checkbox.BorderColor3 = theme.border
+        if checkboxData.isSelected then
+            checkboxData.checkbox.BackgroundColor3 = theme.selected
+        else
+            checkboxData.checkbox.BackgroundColor3 = theme.secondary
+        end
+    end
 end
 
 local function switchTab(tabName)
@@ -956,19 +1173,61 @@ for tabName, button in pairs(tabButtons) do
     end)
 end
 
--- Seed dropdown handling - NOW WITH PROPER EVENT CONNECTIONS
-for seedName, itemButton in pairs(seedDropdownItems) do
-    itemButton.MouseButton1Click:Connect(function()
-        settings.selectedSeed = seedName
-        seedDropdown.Text = seedName .. " ▼"
-        seedDropdownMenu.Visible = false
-        seedDropdownShadow.Visible = false
-        manualBuyBtn.Text = "🛒 Buy " .. seedName
-        print("Selected seed changed to: " .. seedName)
+-- NEW: Seed selection event handlers
+for seedName, checkboxData in pairs(seedCheckboxes) do
+    checkboxData.checkbox.MouseButton1Click:Connect(function()
+        checkboxData.isSelected = not checkboxData.isSelected
+        
+        if checkboxData.isSelected then
+            checkboxData.checkbox.BackgroundColor3 = themes[settings.theme].selected
+            checkboxData.checkMark.Visible = true
+        else
+            checkboxData.checkbox.BackgroundColor3 = themes[settings.theme].secondary
+            checkboxData.checkMark.Visible = false
+        end
+        
+        updateSelectedSeedsList()
     end)
 end
 
--- Speed slider
+-- Select All button
+selectAllBtn.MouseButton1Click:Connect(function()
+    for seedName, checkboxData in pairs(seedCheckboxes) do
+        checkboxData.isSelected = true
+        checkboxData.checkbox.BackgroundColor3 = themes[settings.theme].selected
+        checkboxData.checkMark.Visible = true
+    end
+    updateSelectedSeedsList()
+end)
+
+-- Clear All button
+clearAllBtn.MouseButton1Click:Connect(function()
+    for seedName, checkboxData in pairs(seedCheckboxes) do
+        checkboxData.isSelected = false
+        checkboxData.checkbox.BackgroundColor3 = themes[settings.theme].secondary
+        checkboxData.checkMark.Visible = false
+    end
+    updateSelectedSeedsList()
+end)
+
+-- Buy mode dropdown handling
+for modeName, itemButton in pairs(buyModeItems) do
+    itemButton.MouseButton1Click:Connect(function()
+        settings.buyMode = modeName
+        buyModeDropdown.Text = modeName .. " ▼"
+        buyModeMenu.Visible = false
+        buyModeShadow.Visible = false
+        currentSeedIndex = 1 -- Reset seed index when mode changes
+        print("Buy mode changed to: " .. modeName)
+        
+        -- Update current seed indicator
+        if #settings.selectedSeeds > 0 then
+            currentSeedLabel.Text = "Next: " .. settings.selectedSeeds[1]
+        end
+    end)
+end
+
+-- Speed slider (existing code)
 local draggingSpeed = false
 speedHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1025,7 +1284,7 @@ buyIntervalHandle.InputEnded:Connect(function(input)
     end
 end)
 
--- Toggle handlers
+-- Toggle handlers (existing code)
 flyButton.MouseButton1Click:Connect(function()
     settings.flyEnabled = not settings.flyEnabled
     animateToggle(flyBg, flyButton, settings.flyEnabled)
@@ -1075,14 +1334,22 @@ afkToggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
+-- NEW: Enhanced Auto Buy Toggle
 autoBuyToggleButton.MouseButton1Click:Connect(function()
     settings.autoBuySeeds = not settings.autoBuySeeds
     animateToggle(autoBuyBg, autoBuyToggleButton, settings.autoBuySeeds)
     
     if settings.autoBuySeeds then
-        buyStatusLabel.Text = "Status: Starting auto buy..."
-        buyStatusLabel.TextColor3 = themes[settings.theme].success
-        startAutoBuy()
+        if #settings.selectedSeeds > 0 then
+            buyStatusLabel.Text = "Status: Starting auto buy (" .. settings.buyMode .. " mode)..."
+            buyStatusLabel.TextColor3 = themes[settings.theme].success
+            startAutoBuy()
+        else
+            settings.autoBuySeeds = false
+            animateToggle(autoBuyBg, autoBuyToggleButton, settings.autoBuySeeds)
+            buyStatusLabel.Text = "Status: No seeds selected"
+            buyStatusLabel.TextColor3 = themes[settings.theme].error
+        end
     else
         stopAutoBuy()
     end
@@ -1165,12 +1432,16 @@ seedShopBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-manualBuyBtn.MouseButton1Click:Connect(function()
-    if settings.selectedSeed and settings.selectedSeed ~= "" then
-        manualBuyBtn.Text = "🛒 Buying..."
-        local success = buySeedEnhanced(settings.selectedSeed)
+-- NEW: Enhanced manual buy button
+buySelectedBtn.MouseButton1Click:Connect(function()
+    if #settings.selectedSeeds > 0 then
+        buySelectedBtn.Text = "🛒 Buying..."
+        local success = buyMultipleSeeds(settings.buyMode)
         wait(1)
-        manualBuyBtn.Text = "🛒 Buy " .. settings.selectedSeed
+        buySelectedBtn.Text = "🛒 Buy Selected Seeds"
+    else
+        buyStatusLabel.Text = "Status: No seeds selected"
+        buyStatusLabel.TextColor3 = themes[settings.theme].error
     end
 end)
 
@@ -1520,7 +1791,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if screenGui.Enabled then
             mainContainer.Size = UDim2.new(0, 0, 0, 0)
             local openTween = TweenService:Create(mainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-                Size = UDim2.new(0, 480, 0, 680)
+                Size = UDim2.new(0, 520, 0, 720)
             })
             openTween:Play()
         end
@@ -1535,6 +1806,7 @@ end)
 
 -- Initialize
 updateTheme()
+updateSelectedSeedsList() -- Initialize the selected seeds list
 if player.Character then
     updateMovementSpeed()
 end
@@ -1545,7 +1817,11 @@ mainContainer.Size = UDim2.new(0, 0, 0, 0)
 wait(0.1)
 
 local startupTween = TweenService:Create(mainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
-    Size = UDim2.new(0, 480, 0, 680)
+    Size = UDim2.new(0, 520, 0, 720)
 })
 
 startupTween:Play()
+
+-- Display startup message
+print("=== Grow a Garden Script v2.2 Loaded ===")
+print("💡 Press " .. settings.hotkey.Name .. " to toggle menu")
