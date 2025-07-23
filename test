@@ -1,0 +1,1649 @@
+end
+
+local function autoBuyLoop()
+    while settings.autoBuySeeds do
+        if #settings.selectedSeeds > 0 then
+            local seedName = settings.selectedSeeds[currentSeedIndex]
+            buySeed(seedName)
+            
+            currentSeedIndex = currentSeedIndex + 1
+            if currentSeedIndex > #settings.selectedSeeds then
+                currentSeedIndex = 1
+            end
+        end
+        wait(settings.buyInterval)
+    end
+end
+
+local function collectAllPlants()
+    collectButton.Text = "🔄 Collecting..."
+    local plants = getAllPlants()
+    local collected = 0
+    
+    for _, plant in pairs(plants) do
+        if collectFromPlant(plant) then
+            collected = collected + 1
+        end
+        wait(0.5)
+    end
+    
+    collectButton.Text = "🌾 Collect All"
+    statusText.Text = "✅ Collected " .. collected .. " plants!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    
+    wait(3)
+    statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+-- EVENT HANDLERS
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+
+-- Mobile toggle
+mobileToggle.MouseButton1Click:Connect(function()
+    NeonUI:PlaySound("click")
+    ui.window.Visible = not ui.window.Visible
+    ui.backdrop.Visible = ui.window.Visible
+    
+    if ui.window.Visible then
+        -- Entrance animation
+        ui.window.Size = UDim2.new(0, 0, 0, 0)
+        ui.window:TweenSize(
+            isMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 480, 0, 700),
+            "Out", "Back", 0.5, true
+        )
+        
+        -- Animate backdrop
+        ui.backdrop.BackgroundTransparency = 1
+        TweenService:Create(ui.backdrop,
+            TweenInfo.new(0.3),
+            {BackgroundTransparency = NeonUI.Theme.backdropTransparency}
+        ):Play()
+    end
+end)
+
+-- Close button
+closeButton.MouseButton1Click:Connect(function()
+    ui.window.Visible = false
+    ui.backdrop.Visible = false
+end)
+
+-- Backdrop click to close
+ui.backdrop.MouseButton1Click:Connect(function()
+    ui.window.Visible = false
+    ui.backdrop.Visible = false
+end)
+
+-- Flight toggle
+flyToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Connect(function()
+    settings.flyEnabled = flyToggle.getValue()
+    statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    if settings.flyEnabled then
+        local humanoidRootPart = character.HumanoidRootPart
+        flyBodyVelocity = Instance.new("BodyVelocity")
+        flyBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+        flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        flyBodyVelocity.Parent = humanoidRootPart
+        
+        -- Flight controls
+        local flyControls = {}
+        
+        RunService.Heartbeat:Connect(function()
+            if settings.flyEnabled and flyBodyVelocity then
+                local camera = workspace.CurrentCamera
+                local direction = Vector3.new(0, 0, 0)
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    direction = direction + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    direction = direction - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    direction = direction - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    direction = direction + camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    direction = direction + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    direction = direction - Vector3.new(0, 1, 0)
+                end
+                
+                flyBodyVelocity.Velocity = direction * settings.movementSpeed
+            end
+        end)
+    else
+        if flyBodyVelocity then 
+            flyBodyVelocity:Destroy() 
+            flyBodyVelocity = nil
+        end
+    end
+end)
+
+-- Auto collect toggle
+collectToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Connect(function()
+    settings.autoCollectPlant = collectToggle.getValue()
+    
+    if settings.autoCollectPlant then
+        if autoCollectConnection then task.cancel(autoCollectConnection) end
+        autoCollectConnection = task.spawn(autoCollectLoop)
+    else
+        if autoCollectConnection then
+            task.cancel(autoCollectConnection)
+            autoCollectConnection = nil
+        end
+        statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    end
+end)
+
+-- Auto sell toggle
+autoSellToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Connect(function()
+    settings.autoSellInventory = autoSellToggle.getValue()
+    
+    if settings.autoSellInventory then
+        -- Auto sell logic here if needed
+        statusText.Text = "💰 Auto selling enabled!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    else
+        statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    end
+end)
+
+-- Auto buy toggle
+autoBuyToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Connect(function()
+    settings.autoBuySeeds = autoBuyToggle.getValue()
+    
+    if settings.autoBuySeeds then
+        if autoBuyConnection then task.cancel(autoBuyConnection) end
+        autoBuyConnection = task.spawn(autoBuyLoop)
+        statusText.Text = "🛒 Auto buying seeds!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    else
+        if autoBuyConnection then
+            task.cancel(autoBuyConnection)
+            autoBuyConnection = nil
+        end
+        statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    end
+end)
+
+-- Quick action buttons
+sellButton.MouseButton1Click:Connect(function()
+    task.spawn(sellInventoryWithTeleport)
+end)
+
+buyButton.MouseButton1Click:Connect(function()
+    buySeed(settings.selectedSeeds[1])
+    statusText.Text = "🛒 Bought " .. settings.selectedSeeds[1] .. "!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+    
+    wait(3)
+    statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")"
+end)
+
+collectButton.MouseButton1Click:Connect(function()
+    task.spawn(collectAllPlants)
+end)
+
+-- Mobile flight controls
+if isMobile then
+    local function createMobileFlightControls()
+        local flightFrame = Instance.new("Frame")
+        flightFrame.Name = "FlightControls"
+        flightFrame.Size = UDim2.new(0, 160, 0, 160)
+        flightFrame.Position = UDim2.new(0, 20, 1, -180)
+        flightFrame.BackgroundColor3 = NeonUI.Theme.surface
+        flightFrame.BackgroundTransparency = 0.2
+        flightFrame.BorderSizePixel = 0
+        flightFrame.Visible = false
+        flightFrame.Parent = ui.screenGui
+        
+        local flightCorner = Instance.new("UICorner")
+        flightCorner.CornerRadius = UDim.new(0, 15)
+        flightCorner.Parent = flightFrame
+        
+        local flightStroke = Instance.new("UIStroke")
+        flightStroke.Color = NeonUI.Theme.primary
+        flightStroke.Thickness = 2
+        flightStroke.Transparency = 0.5
+        flightStroke.Parent = flightFrame
+        
+        NeonUI:CreateGlow(flightFrame, NeonUI.Theme.primary)
+        
+        -- Direction buttons
+        local buttons = {
+            {text = "↑", pos = UDim2.new(0.5, -20, 0, 10), dir = "forward"},
+            {text = "↓", pos = UDim2.new(0.5, -20, 1, -50), dir = "backward"},
+            {text = "←", pos = UDim2.new(0, 10, 0.5, -20), dir = "left"},
+            {text = "→", pos = UDim2.new(1, -50, 0.5, -20), dir = "right"},
+            {text = "▲", pos = UDim2.new(0.5, -20, 0.5, -35), dir = "up"},
+            {text = "▼", pos = UDim2.new(0.5, -20, 0.5, -5), dir = "down"}
+        }
+        
+        for _, buttonData in ipairs(buttons) do
+            local btn = NeonUI:CreateButton(flightFrame, buttonData.text, buttonData.pos, UDim2.new(0, 40, 0, 30), NeonUI.Theme.secondary)
+            
+            -- Touch controls for flight
+            btn.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.Touch and settings.flyEnabled and flyBodyVelocity then
+                    local camera = workspace.CurrentCamera
+                    local direction = Vector3.new(0, 0, 0)
+                    
+                    if buttonData.dir == "forward" then
+                        direction = camera.CFrame.LookVector
+                    elseif buttonData.dir == "backward" then
+                        direction = -camera.CFrame.LookVector
+                    elseif buttonData.dir == "left" then
+                        direction = -camera.CFrame.RightVector
+                    elseif buttonData.dir == "right" then
+                        direction = camera.CFrame.RightVector
+                    elseif buttonData.dir == "up" then
+                        direction = Vector3.new(0, 1, 0)
+                    elseif buttonData.dir == "down" then
+                        direction = Vector3.new(0, -1, 0)
+                    end
+                    
+                    flyBodyVelocity.Velocity = direction * settings.movementSpeed
+                end
+            end)
+            
+            btn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.Touch and flyBodyVelocity then
+                    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                end
+            end)
+        end
+        
+        return flightFrame
+    end
+    
+    local mobileFlightControls = createMobileFlightControls()
+    
+    -- Show/hide flight controls based on flight mode
+    local function updateFlightControlsVisibility()
+        if mobileFlightControls then
+            mobileFlightControls.Visible = settings.flyEnabled
+        end
+    end
+    
+    -- Update flight controls when flight is toggled
+    spawn(function()
+        while true do
+            updateFlightControlsVisibility()
+            wait(0.5)
+        end
+    end)
+end
+
+-- Initialize
+updateMovementSpeed()
+
+-- Character respawn handling
+player.CharacterAdded:Connect(function(character)
+    character:WaitForChild("Humanoid")
+    updateMovementSpeed()
+    
+    -- Reset flight if enabled
+    if settings.flyEnabled then
+        wait(1)
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            flyBodyVelocity = Instance.new("BodyVelocity")
+            flyBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            flyBodyVelocity.Parent = humanoidRootPart
+        end
+    end
+end)
+
+-- Notification system
+local function showNotification(text, color, duration)
+    local notification = Instance.new("Frame")
+    notification.Size = UDim2.new(0, 300, 0, 60)
+    notification.Position = UDim2.new(1, -320, 0, 100)
+    notification.BackgroundColor3 = color or NeonUI.Theme.success
+    notification.BackgroundTransparency = 0.1
+    notification.BorderSizePixel = 0
+    notification.Parent = ui.screenGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 10)
+    notifCorner.Parent = notification
+    
+    local notifStroke = Instance.new("UIStroke")
+    notifStroke.Color = color or NeonUI.Theme.success
+    notifStroke.Thickness = 2
+    notifStroke.Transparency = 0.3
+    notifStroke.Parent = notification
+    
+    NeonUI:CreateGlow(notification, color or NeonUI.Theme.success)
+    
+    local notifText = Instance.new("TextLabel")
+    notifText.Size = UDim2.new(1, -20, 1, 0)
+    notifText.Position = UDim2.new(0, 10, 0, 0)
+    notifText.BackgroundTransparency = 1
+    notifText.Text = text
+    notifText.TextColor3 = NeonUI.Theme.textPrimary
+    notifText.TextSize = 14
+    notifText.Font = Enum.Font.GothamBold
+    notifText.TextWrapped = true
+    notifText.TextYAlignment = Enum.TextYAlignment.Center
+    notifText.Parent = notification
+    
+    -- Slide in animation
+    notification:TweenPosition(
+        UDim2.new(1, -320, 0, 100),
+        "Out", "Back", 0.5, true
+    )
+    
+    -- Auto hide after duration
+    task.wait(duration or 3)
+    
+    -- Slide out animation
+    notification:TweenPosition(
+        UDim2.new(1, 0, 0, 100),
+        "In", "Back", 0.3, true,
+        function()
+            notification:Destroy()
+        end
+    )
+end
+
+-- Enhanced status updates with notifications
+local originalSellFunction = sellInventoryWithTeleport
+sellInventoryWithTeleport = function()
+    showNotification("💰 Selling inventory...", NeonUI.Theme.warning, 2)
+    originalSellFunction()
+    showNotification("✅ Inventory sold successfully!", NeonUI.Theme.success, 3)
+end
+
+-- Keybind system
+local keybinds = {
+    [Enum.KeyCode.F1] = function()
+        mobileToggle.MouseButton1Click:Fire()
+    end,
+    [Enum.KeyCode.F2] = function()
+        if flyToggle.getValue() ~= settings.flyEnabled then
+            flyToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Fire()
+        end
+    end,
+    [Enum.KeyCode.F3] = function()
+        if collectToggle.getValue() ~= settings.autoCollectPlant then
+            collectToggle.container:FindFirstChild("ToggleContainer"):FindFirstChild("Frame"):FindFirstChild("TextButton").MouseButton1Click:Fire()
+        end
+    end,
+    [Enum.KeyCode.F4] = function()
+        sellButton.MouseButton1Click:Fire()
+    end,
+    [Enum.KeyCode.F5] = function()
+        collectButton.MouseButton1Click:Fire()
+    end
+}
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if keybinds[input.KeyCode] then
+        keybinds[input.KeyCode]()
+    end
+end)
+
+-- Performance monitoring
+local performanceSection = NeonUI:CreateSection(scrollFrame, "⚡ Performance", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 100))
+performanceSection.section.LayoutOrder = 9
+
+local performanceText = Instance.new("TextLabel")
+performanceText.Size = UDim2.new(1, 0, 1, -20)
+performanceText.Position = UDim2.new(0, 0, 0, 10)
+performanceText.BackgroundTransparency = 1
+performanceText.Text = "📊 FPS: 60\n💾 Memory: 0 MB\n🔗 Ping: 0 ms"
+performanceText.TextColor3 = NeonUI.Theme.textSecondary
+performanceText.TextSize = 12
+performanceText.Font = Enum.Font.Gotham
+performanceText.TextXAlignment = Enum.TextXAlignment.Left
+performanceText.TextYAlignment = Enum.TextYAlignment.Top
+performanceText.Parent = performanceSection.content
+
+-- Performance monitoring loop
+spawn(function()
+    while true do
+        local fps = math.floor(1 / RunService.Heartbeat:Wait())
+        local memory = math.floor(game:GetService("Stats"):GetTotalMemoryUsageMb())
+        local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+        
+        performanceText.Text = "📊 FPS: " .. fps .. "\n💾 Memory: " .. memory .. " MB\n🔗 Ping: " .. ping .. " ms"
+        wait(1)
+    end
+end)
+
+-- Settings save/load system
+local function saveSettings()
+    local settingsData = {
+        movementSpeed = settings.movementSpeed,
+        flyEnabled = settings.flyEnabled,
+        autoCollectPlant = settings.autoCollectPlant,
+        autoSellInventory = settings.autoSellInventory,
+        autoBuySeeds = settings.autoBuySeeds,
+        selectedSeeds = settings.selectedSeeds,
+        buyInterval = settings.buyInterval,
+        buyMode = settings.buyMode
+    }
+    
+    -- In a real Roblox environment, you'd use DataStoreService here
+    -- For now, we'll just store it in a global variable
+    _G.GardenScriptSettings = settingsData
+end
+
+local function loadSettings()
+    if _G.GardenScriptSettings then
+        local data = _G.GardenScriptSettings
+        settings.movementSpeed = data.movementSpeed or 16
+        settings.flyEnabled = data.flyEnabled or false
+        settings.autoCollectPlant = data.autoCollectPlant or false
+        settings.autoSellInventory = data.autoSellInventory or false
+        settings.autoBuySeeds = data.autoBuySeeds or false
+        settings.selectedSeeds = data.selectedSeeds or {"Apple"}
+        settings.buyInterval = data.buyInterval or 5
+        settings.buyMode = data.buyMode or "Sequential"
+        
+        -- Update UI elements
+        speedSlider.setValue(settings.movementSpeed)
+        flyToggle.setValue(settings.flyEnabled)
+        collectToggle.setValue(settings.autoCollectPlant)
+        autoSellToggle.setValue(settings.autoSellInventory)
+        autoBuyToggle.setValue(settings.autoBuySeeds)
+        buyIntervalSlider.setValue(settings.buyInterval)
+    end
+end
+
+-- Auto-save settings when changed
+local originalUpdateMovementSpeed = updateMovementSpeed
+updateMovementSpeed = function()
+    originalUpdateMovementSpeed()
+    saveSettings()
+end
+
+-- Settings section
+local settingsSection = NeonUI:CreateSection(scrollFrame, "⚙️ Settings", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 120))
+settingsSection.section.LayoutOrder = 10
+
+local saveButton = NeonUI:CreateButton(
+    settingsSection.content,
+    "💾 Save Settings",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(0.48, 0, 0, 45),
+    NeonUI.Theme.secondary
+)
+
+local loadButton = NeonUI:CreateButton(
+    settingsSection.content,
+    "📂 Load Settings",
+    UDim2.new(0.52, 0, 0, 10),
+    UDim2.new(0.48, 0, 0, 45),
+    NeonUI.Theme.accent
+)
+
+local resetButton = NeonUI:CreateButton(
+    settingsSection.content,
+    "🔄 Reset All",
+    UDim2.new(0, 0, 0, 65),
+    UDim2.new(1, 0, 0, 45),
+    NeonUI.Theme.error
+)
+
+saveButton.MouseButton1Click:Connect(function()
+    saveSettings()
+    showNotification("💾 Settings saved successfully!", NeonUI.Theme.success, 2)
+end)
+
+loadButton.MouseButton1Click:Connect(function()
+    loadSettings()
+    showNotification("📂 Settings loaded successfully!", NeonUI.Theme.success, 2)
+end)
+
+resetButton.MouseButton1Click:Connect(function()
+    -- Reset all settings to default
+    settings.movementSpeed = 16
+    settings.flyEnabled = false
+    settings.autoCollectPlant = false
+    settings.autoSellInventory = false
+    settings.autoBuySeeds = false
+    settings.selectedSeeds = {"Apple"}
+    settings.buyInterval = 5
+    
+    -- Update UI
+    speedSlider.setValue(16)
+    flyToggle.setValue(false)
+    collectToggle.setValue(false)
+    autoSellToggle.setValue(false)
+    autoBuyToggle.setValue(false)
+    buyIntervalSlider.setValue(5)
+    
+    updateMovementSpeed()
+    showNotification("🔄 All settings reset to default!", NeonUI.Theme.warning, 3)
+end)
+
+-- Help section
+local helpSection = NeonUI:CreateSection(scrollFrame, "❓ Help & Keybinds", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 180))
+helpSection.section.LayoutOrder = 11
+
+local helpText = Instance.new("TextLabel")
+helpText.Size = UDim2.new(1, 0, 1, -20)
+helpText.Position = UDim2.new(0, 0, 0, 10)
+helpText.BackgroundTransparency = 1
+helpText.Text = [[⌨️ Keybinds:
+F1 - Toggle GUI
+F2 - Toggle Flight
+F3 - Toggle Auto Collect
+F4 - Sell Inventory
+F5 - Collect All Plants
+
+✈️ Flight Controls:
+WASD - Move horizontally
+Space - Fly up
+Shift - Fly down
+
+📱 Mobile: Use touch controls when flight is enabled]]
+helpText.TextColor3 = NeonUI.Theme.textSecondary
+helpText.TextSize = 11
+helpText.Font = Enum.Font.Gotham
+helpText.TextXAlignment = Enum.TextXAlignment.Left
+helpText.TextYAlignment = Enum.TextYAlignment.Top
+helpText.TextWrapped = true
+helpText.Parent = helpSection.content
+
+-- Credits section
+local creditsSection = NeonUI:CreateSection(scrollFrame, "👨‍💻 Credits", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 80))
+creditsSection.section.LayoutOrder = 12
+
+local creditsText = Instance.new("TextLabel")
+creditsText.Size = UDim2.new(1, 0, 1, -20)
+creditsText.Position = UDim2.new(0, 0, 0, 10)
+creditsText.BackgroundTransparency = 1
+creditsText.Text = "🌱 Garden Script Pro v2.0\n💡 Powered by NeonUI Library\n🎨 Modern Glassmorphism Design"
+creditsText.TextColor3 = NeonUI.Theme.textSecondary
+creditsText.TextSize = 11
+creditsText.Font = Enum.Font.Gotham
+creditsText.TextXAlignment = Enum.TextXAlignment.Center
+creditsText.TextYAlignment = Enum.TextYAlignment.Center
+creditsText.Parent = creditsSection.content
+
+-- Load saved settings on start
+loadSettings()
+
+-- Startup notification
+showNotification("🌱 Garden Script Pro loaded successfully!\nPress F1 to toggle GUI", NeonUI.Theme.primary, 5)
+
+-- Debug mode toggle (hidden feature)
+local debugMode = false
+local debugClicks = 0
+
+ui.titleLabel.MouseButton1Click:Connect(function()
+    debugClicks = debugClicks + 1
+    if debugClicks >= 5 then
+        debugMode = not debugMode
+        debugClicks = 0
+        
+        if debugMode then
+            showNotification("🐛 Debug mode enabled!", NeonUI.Theme.warning, 3)
+            
+            -- Add debug section
+            local debugSection = NeonUI:CreateSection(scrollFrame, "🐛 Debug", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 120))
+            debugSection.section.LayoutOrder = 0
+            debugSection.section.Name = "DebugSection"
+            
+            local debugText = Instance.new("TextLabel")
+            debugText.Size = UDim2.new(1, 0, 1, -20)
+            debugText.Position = UDim2.new(0, 0, 0, 10)
+            debugText.BackgroundTransparency = 1
+            debugText.Text = "🐛 Debug Info:\nPlayer: " .. player.Name .. "\nUserId: " .. player.UserId .. "\nVersion: 2.0"
+            debugText.TextColor3 = NeonUI.Theme.textSecondary
+            debugText.TextSize = 10
+            debugText.Font = Enum.Font.Gotham
+            debugText.TextXAlignment = Enum.TextXAlignment.Left
+            debugText.TextYAlignment = Enum.TextYAlignment.Top
+            debugText.Parent = debugSection.content
+        else
+            showNotification("🐛 Debug mode disabled!", NeonUI.Theme.success, 3)
+            local debugSection = scrollFrame:FindFirstChild("DebugSection")
+            if debugSection then debugSection:Destroy() end
+        end
+    end
+end)
+
+-- Anti-detection measures
+local function antiDetection()
+    -- Hide from basic detection methods
+    ui.screenGui.Name = "PlayerGui_" .. math.random(1000, 9999)
+    
+    -- Randomize update intervals
+    spawn(function()
+        while true do
+            wait(math.random(5, 15))
+            if settings.autoCollectPlant or settings.autoBuySeeds then
+                -- Add slight random delays to avoid pattern detection
+                wait(math.random(1, 3) / 10)
+            end
+        end
+    end)
+end
+
+antiDetection()
+
+print("🌱 Garden Script Pro v2.0 loaded successfully!")
+print("📱 Press the garden icon or F1 to open the GUI")
+print("⚡ Enjoy the modern glassmorphism interface!")
+-- Moderne Garden Script GUI mit Custom UI Library
+-- Optimiert für Mobile und Desktop mit glassmorphism Design
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Events
+local sellInventoryEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Sell_Inventory")
+local buySeedEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("BuySeedStock")
+
+local SELL_POSITION = Vector3.new(86, 2, 0)
+
+-- Settings
+local settings = {
+    movementSpeed = 16,
+    flyEnabled = false,
+    autoCollectPlant = false,
+    autoSellInventory = false,
+    autoBuySeeds = false,
+    selectedSeeds = {"Apple"},
+    buyInterval = 5,
+    buyMode = "Sequential"
+}
+
+local availableSeeds = {
+    "Apple", "Bamboo", "Beanstalk", "Blueberry", "Carrot", "Cherry",
+    "Coconut", "Corn", "Cotton", "Grape", "Lemon", "Orange",
+    "Pear", "Potato", "Pumpkin", "Strawberry", "Tomato", "Watermelon", "Wheat"
+}
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+-- MODERNE UI LIBRARY - "NeonUI"
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+
+local NeonUI = {}
+
+-- Theme System mit Glassmorphism
+NeonUI.Theme = {
+    -- Basis Farben
+    background = Color3.fromRGB(10, 10, 15),
+    surface = Color3.fromRGB(20, 20, 30),
+    surfaceGlass = Color3.fromRGB(25, 25, 35),
+    
+    -- Neon Akzente
+    primary = Color3.fromRGB(0, 255, 150),
+    secondary = Color3.fromRGB(100, 150, 255),
+    accent = Color3.fromRGB(255, 100, 200),
+    warning = Color3.fromRGB(255, 200, 0),
+    error = Color3.fromRGB(255, 80, 80),
+    success = Color3.fromRGB(0, 255, 100),
+    
+    -- Text
+    textPrimary = Color3.fromRGB(255, 255, 255),
+    textSecondary = Color3.fromRGB(180, 180, 200),
+    textMuted = Color3.fromRGB(120, 120, 140),
+    
+    -- Transparenzen
+    glassTransparency = 0.2,
+    backdropTransparency = 0.3,
+    shadowTransparency = 0.5
+}
+
+-- Animations
+NeonUI.Animations = {
+    fast = 0.15,
+    medium = 0.3,
+    slow = 0.5,
+    easeStyle = Enum.EasingStyle.Quad,
+    easeDirection = Enum.EasingDirection.Out
+}
+
+-- Sound Effects
+NeonUI.Sounds = {
+    click = "rbxasset://sounds/electronicpingshort.wav",
+    hover = "rbxasset://sounds/button-09.mp3",
+    toggle = "rbxasset://sounds/switch.mp3"
+}
+
+-- Utility Functions
+function NeonUI:CreateSound(soundId)
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundId
+    sound.Volume = 0.3
+    sound.Parent = SoundService
+    return sound
+end
+
+function NeonUI:PlaySound(soundType)
+    if self.Sounds[soundType] then
+        local sound = self:CreateSound(self.Sounds[soundType])
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end
+end
+
+function NeonUI:CreateGlow(parent, color, intensity)
+    local glow = Instance.new("ImageLabel")
+    glow.Name = "NeonGlow"
+    glow.Size = UDim2.new(1, 20, 1, 20)
+    glow.Position = UDim2.new(0, -10, 0, -10)
+    glow.BackgroundTransparency = 1
+    glow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    glow.ImageColor3 = color or self.Theme.primary
+    glow.ImageTransparency = 0.7
+    glow.ZIndex = parent.ZIndex - 1
+    glow.Parent = parent
+    
+    -- Pulsing animation
+    local pulse = TweenService:Create(glow, 
+        TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {ImageTransparency = 0.9}
+    )
+    pulse:Play()
+    
+    return glow
+end
+
+function NeonUI:CreateGradient(parent, colors, rotation)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new(colors or {
+        ColorSequenceKeypoint.new(0, self.Theme.primary),
+        ColorSequenceKeypoint.new(1, self.Theme.secondary)
+    })
+    gradient.Rotation = rotation or 45
+    gradient.Parent = parent
+    return gradient
+end
+
+function NeonUI:CreateBlur(parent, size)
+    local blur = Instance.new("Frame")
+    blur.Name = "BlurEffect"
+    blur.Size = UDim2.new(1, size or 0, 1, size or 0)
+    blur.Position = UDim2.new(0, -(size or 0)/2, 0, -(size or 0)/2)
+    blur.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    blur.BackgroundTransparency = 0.95
+    blur.BorderSizePixel = 0
+    blur.ZIndex = parent.ZIndex - 1
+    blur.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 15)
+    corner.Parent = blur
+    
+    return blur
+end
+
+-- Main Container
+function NeonUI:CreateWindow(title, size)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "NeonUI"
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.IgnoreGuiInset = true
+    screenGui.Parent = playerGui
+    
+    -- Backdrop
+    local backdrop = Instance.new("Frame")
+    backdrop.Name = "Backdrop"
+    backdrop.Size = UDim2.new(1, 0, 1, 0)
+    backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backdrop.BackgroundTransparency = self.Theme.backdropTransparency
+    backdrop.BorderSizePixel = 0
+    backdrop.Visible = false
+    backdrop.Parent = screenGui
+    
+    -- Main Window
+    local window = Instance.new("Frame")
+    window.Name = "MainWindow"
+    window.Size = size or UDim2.new(0, 450, 0, 650)
+    window.Position = UDim2.new(0.5, 0, 0.5, 0)
+    window.AnchorPoint = Vector2.new(0.5, 0.5)
+    window.BackgroundColor3 = self.Theme.surfaceGlass
+    window.BackgroundTransparency = self.Theme.glassTransparency
+    window.BorderSizePixel = 0
+    window.ClipsDescendants = true
+    window.Parent = screenGui
+    
+    -- Window Corner
+    local windowCorner = Instance.new("UICorner")
+    windowCorner.CornerRadius = UDim.new(0, 20)
+    windowCorner.Parent = window
+    
+    -- Window Stroke
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Theme.primary
+    stroke.Thickness = 2
+    stroke.Transparency = 0.5
+    stroke.Parent = window
+    
+    -- Window Gradient
+    self:CreateGradient(window, {
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 45)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 25))
+    }, 135)
+    
+    -- Glow Effect
+    self:CreateGlow(window, self.Theme.primary, 1)
+    
+    -- Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 60)
+    titleBar.BackgroundColor3 = self.Theme.surface
+    titleBar.BackgroundTransparency = 0.1
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = window
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 20)
+    titleCorner.Parent = titleBar
+    
+    local titleFix = Instance.new("Frame")
+    titleFix.Size = UDim2.new(1, 0, 0, 20)
+    titleFix.Position = UDim2.new(0, 0, 1, -20)
+    titleFix.BackgroundColor3 = self.Theme.surface
+    titleFix.BackgroundTransparency = 0.1
+    titleFix.BorderSizePixel = 0
+    titleFix.Parent = titleBar
+    
+    -- Title Gradient
+    self:CreateGradient(titleBar, {
+        ColorSequenceKeypoint.new(0, self.Theme.primary),
+        ColorSequenceKeypoint.new(0.5, self.Theme.secondary),
+        ColorSequenceKeypoint.new(1, self.Theme.accent)
+    }, 90)
+    
+    -- Title Text
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -70, 1, 0)
+    titleLabel.Position = UDim2.new(0, 20, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title or "NeonUI Window"
+    titleLabel.TextColor3 = self.Theme.textPrimary
+    titleLabel.TextSize = 20
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextStrokeTransparency = 0.5
+    titleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    titleLabel.Parent = titleBar
+    
+    return {
+        screenGui = screenGui,
+        window = window,
+        titleBar = titleBar,
+        backdrop = backdrop,
+        titleLabel = titleLabel
+    }
+end
+
+-- Toggle Button
+function NeonUI:CreateToggle(parent, text, position, size, initialState)
+    local container = Instance.new("Frame")
+    container.Name = "ToggleContainer"
+    container.Size = size or UDim2.new(1, -20, 0, 50)
+    container.Position = position or UDim2.new(0, 10, 0, 0)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+    
+    -- Label
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -80, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = self.Theme.textPrimary
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.Parent = container
+    
+    -- Toggle Background
+    local toggleBg = Instance.new("Frame")
+    toggleBg.Size = UDim2.new(0, 60, 0, 30)
+    toggleBg.Position = UDim2.new(1, -60, 0.5, -15)
+    toggleBg.BackgroundColor3 = initialState and self.Theme.success or self.Theme.surface
+    toggleBg.BorderSizePixel = 0
+    toggleBg.Parent = container
+    
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 15)
+    toggleCorner.Parent = toggleBg
+    
+    local toggleStroke = Instance.new("UIStroke")
+    toggleStroke.Color = initialState and self.Theme.success or self.Theme.textMuted
+    toggleStroke.Thickness = 2
+    toggleStroke.Transparency = 0.3
+    toggleStroke.Parent = toggleBg
+    
+    -- Toggle Button
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Size = UDim2.new(0, 26, 0, 26)
+    toggleButton.Position = initialState and UDim2.new(0, 32, 0, 2) or UDim2.new(0, 2, 0, 2)
+    toggleButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Text = ""
+    toggleButton.Parent = toggleBg
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 13)
+    buttonCorner.Parent = toggleButton
+    
+    -- Glow für aktiven Zustand
+    if initialState then
+        self:CreateGlow(toggleBg, self.Theme.success)
+    end
+    
+    -- Toggle Logic
+    local isToggled = initialState or false
+    
+    toggleButton.MouseButton1Click:Connect(function()
+        isToggled = not isToggled
+        self:PlaySound("toggle")
+        
+        local targetBgColor = isToggled and self.Theme.success or self.Theme.surface
+        local targetStrokeColor = isToggled and self.Theme.success or self.Theme.textMuted
+        local targetPos = isToggled and UDim2.new(0, 32, 0, 2) or UDim2.new(0, 2, 0, 2)
+        
+        -- Animations
+        TweenService:Create(toggleBg, 
+            TweenInfo.new(self.Animations.fast, self.Animations.easeStyle),
+            {BackgroundColor3 = targetBgColor}
+        ):Play()
+        
+        TweenService:Create(toggleStroke,
+            TweenInfo.new(self.Animations.fast, self.Animations.easeStyle),
+            {Color = targetStrokeColor}
+        ):Play()
+        
+        TweenService:Create(toggleButton,
+            TweenInfo.new(self.Animations.medium, Enum.EasingStyle.Back),
+            {Position = targetPos}
+        ):Play()
+        
+        -- Glow Effect
+        if isToggled then
+            self:CreateGlow(toggleBg, self.Theme.success)
+        else
+            local glow = toggleBg:FindFirstChild("NeonGlow")
+            if glow then glow:Destroy() end
+        end
+    end)
+    
+    -- Hover Effects
+    toggleButton.MouseEnter:Connect(function()
+        self:PlaySound("hover")
+        TweenService:Create(toggleButton,
+            TweenInfo.new(self.Animations.fast),
+            {Size = UDim2.new(0, 28, 0, 28), Position = toggleButton.Position - UDim2.new(0, 1, 0, 1)}
+        ):Play()
+    end)
+    
+    toggleButton.MouseLeave:Connect(function()
+        TweenService:Create(toggleButton,
+            TweenInfo.new(self.Animations.fast),
+            {Size = UDim2.new(0, 26, 0, 26), Position = toggleButton.Position + UDim2.new(0, 1, 0, 1)}
+        ):Play()
+    end)
+    
+    return {
+        container = container,
+        getValue = function() return isToggled end,
+        setValue = function(value) 
+            if value ~= isToggled then
+                toggleButton.MouseButton1Click:Fire()
+            end
+        end
+    }
+end
+
+-- Modern Button
+function NeonUI:CreateButton(parent, text, position, size, color, textColor)
+    local button = Instance.new("TextButton")
+    button.Size = size or UDim2.new(0, 120, 0, 40)
+    button.Position = position or UDim2.new(0, 0, 0, 0)
+    button.BackgroundColor3 = color or self.Theme.primary
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = textColor or Color3.fromRGB(255, 255, 255)
+    button.TextSize = 14
+    button.Font = Enum.Font.GothamBold
+    button.TextStrokeTransparency = 0.7
+    button.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = button
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or self.Theme.primary
+    stroke.Thickness = 2
+    stroke.Transparency = 0.3
+    stroke.Parent = button
+    
+    -- Gradient
+    self:CreateGradient(button, {
+        ColorSequenceKeypoint.new(0, color or self.Theme.primary),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(
+            math.max(0, (color or self.Theme.primary).R * 255 - 30),
+            math.max(0, (color or self.Theme.primary).G * 255 - 30),
+            math.max(0, (color or self.Theme.primary).B * 255 - 30)
+        ))
+    }, 45)
+    
+    -- Hover Effects
+    button.MouseEnter:Connect(function()
+        self:PlaySound("hover")
+        TweenService:Create(button,
+            TweenInfo.new(self.Animations.fast),
+            {Size = (size or UDim2.new(0, 120, 0, 40)) + UDim2.new(0, 4, 0, 2)}
+        ):Play()
+        
+        self:CreateGlow(button, color or self.Theme.primary)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button,
+            TweenInfo.new(self.Animations.fast),
+            {Size = size or UDim2.new(0, 120, 0, 40)}
+        ):Play()
+        
+        local glow = button:FindFirstChild("NeonGlow")
+        if glow then glow:Destroy() end
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        self:PlaySound("click")
+        -- Click animation
+        TweenService:Create(button,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+            {Size = (size or UDim2.new(0, 120, 0, 40)) - UDim2.new(0, 2, 0, 1)}
+        ):Play()
+        
+        wait(0.1)
+        
+        TweenService:Create(button,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+            {Size = size or UDim2.new(0, 120, 0, 40)}
+        ):Play()
+    end)
+    
+    return button
+end
+
+-- Slider
+function NeonUI:CreateSlider(parent, text, position, size, minValue, maxValue, initialValue, callback)
+    local container = Instance.new("Frame")
+    container.Size = size or UDim2.new(1, -20, 0, 70)
+    container.Position = position or UDim2.new(0, 10, 0, 0)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+    
+    -- Label
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 25)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. (initialValue or minValue)
+    label.TextColor3 = self.Theme.textPrimary
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+    
+    -- Slider Track
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, 0, 0, 8)
+    track.Position = UDim2.new(0, 0, 0, 35)
+    track.BackgroundColor3 = self.Theme.surface
+    track.BorderSizePixel = 0
+    track.Parent = container
+    
+    local trackCorner = Instance.new("UICorner")
+    trackCorner.CornerRadius = UDim.new(0, 4)
+    trackCorner.Parent = track
+    
+    -- Slider Fill
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((initialValue or minValue) / maxValue, 0, 1, 0)
+    fill.BackgroundColor3 = self.Theme.primary
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 4)
+    fillCorner.Parent = fill
+    
+    self:CreateGradient(fill)
+    
+    -- Slider Handle
+    local handle = Instance.new("Frame")
+    handle.Size = UDim2.new(0, 20, 0, 20)
+    handle.Position = UDim2.new((initialValue or minValue) / maxValue, -10, 0.5, -10)
+    handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    handle.BorderSizePixel = 0
+    handle.Parent = track
+    
+    local handleCorner = Instance.new("UICorner")
+    handleCorner.CornerRadius = UDim.new(0, 10)
+    handleCorner.Parent = handle
+    
+    local handleStroke = Instance.new("UIStroke")
+    handleStroke.Color = self.Theme.primary
+    handleStroke.Thickness = 3
+    handleStroke.Parent = handle
+    
+    self:CreateGlow(handle, self.Theme.primary)
+    
+    -- Slider Logic
+    local currentValue = initialValue or minValue
+    local dragging = false
+    
+    local function updateSlider(percentage)
+        percentage = math.clamp(percentage, 0, 1)
+        currentValue = minValue + (maxValue - minValue) * percentage
+        currentValue = math.floor(currentValue)
+        
+        label.Text = text .. ": " .. currentValue
+        
+        TweenService:Create(fill,
+            TweenInfo.new(0.1),
+            {Size = UDim2.new(percentage, 0, 1, 0)}
+        ):Play()
+        
+        TweenService:Create(handle,
+            TweenInfo.new(0.1),
+            {Position = UDim2.new(percentage, -10, 0.5, -10)}
+        ):Play()
+        
+        if callback then callback(currentValue) end
+    end
+    
+    -- Touch/Click handling
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            local percentage = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            updateSlider(percentage)
+        end
+    end)
+    
+    track.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or 
+                        input.UserInputType == Enum.UserInputType.Touch) then
+            local percentage = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            updateSlider(percentage)
+        end
+    end)
+    
+    track.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    return {
+        container = container,
+        getValue = function() return currentValue end,
+        setValue = function(value) 
+            local percentage = (value - minValue) / (maxValue - minValue)
+            updateSlider(percentage)
+        end
+    }
+end
+
+-- Section/Card
+function NeonUI:CreateSection(parent, title, position, size)
+    local section = Instance.new("Frame")
+    section.Size = size or UDim2.new(1, -20, 0, 150)
+    section.Position = position or UDim2.new(0, 10, 0, 0)
+    section.BackgroundColor3 = self.Theme.surface
+    section.BackgroundTransparency = 0.1
+    section.BorderSizePixel = 0
+    section.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 15)
+    corner.Parent = section
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Theme.primary
+    stroke.Thickness = 1
+    stroke.Transparency = 0.7
+    stroke.Parent = section
+    
+    self:CreateBlur(section, 4)
+    
+    -- Title
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 30)
+    titleLabel.Position = UDim2.new(0, 10, 0, 10)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = self.Theme.textPrimary
+    titleLabel.TextSize = 16
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextStrokeTransparency = 0.7
+    titleLabel.Parent = section
+    
+    -- Content Area
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(1, -20, 1, -50)
+    content.Position = UDim2.new(0, 10, 0, 40)
+    content.BackgroundTransparency = 1
+    content.Parent = section
+    
+    return {
+        section = section,
+        content = content,
+        title = titleLabel
+    }
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+-- GARDEN SCRIPT GUI IMPLEMENTATION
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+
+-- Mobile detection
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Global variables
+local flyBodyVelocity = nil
+local autoCollectConnection = nil
+local autoBuyConnection = nil
+local currentSeedIndex = 1
+
+-- Create main window
+local ui = NeonUI:CreateWindow("🌱 Garden Script Pro", isMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 480, 0, 700))
+
+-- Toggle button für mobile
+local mobileToggle = Instance.new("TextButton")
+mobileToggle.Name = "MobileToggle"
+mobileToggle.Size = UDim2.new(0, 70, 0, 70)
+mobileToggle.Position = UDim2.new(1, -90, 0, 20)
+mobileToggle.BackgroundColor3 = NeonUI.Theme.primary
+mobileToggle.BorderSizePixel = 0
+mobileToggle.Text = "🌱"
+mobileToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+mobileToggle.TextSize = 24
+mobileToggle.Font = Enum.Font.GothamBold
+mobileToggle.Parent = ui.screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 35)
+toggleCorner.Parent = mobileToggle
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = NeonUI.Theme.primary
+toggleStroke.Thickness = 3
+toggleStroke.Parent = mobileToggle
+
+NeonUI:CreateGlow(mobileToggle, NeonUI.Theme.primary)
+
+-- Close button
+local closeButton = NeonUI:CreateButton(ui.titleBar, "✕", UDim2.new(1, -50, 0, 10), UDim2.new(0, 40, 0, 40), NeonUI.Theme.error)
+
+-- Scrolling content
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, 0, 1, -60)
+scrollFrame.Position = UDim2.new(0, 0, 0, 60)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 8
+scrollFrame.ScrollBarImageColor3 = NeonUI.Theme.primary
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+scrollFrame.Parent = ui.window
+
+local contentPadding = Instance.new("UIPadding")
+contentPadding.PaddingLeft = UDim.new(0, 15)
+contentPadding.PaddingRight = UDim.new(0, 15)
+contentPadding.PaddingTop = UDim.new(0, 10)
+contentPadding.PaddingBottom = UDim.new(0, 10)
+contentPadding.Parent = scrollFrame
+
+local contentLayout = Instance.new("UIListLayout")
+contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+contentLayout.Padding = UDim.new(0, 15)
+contentLayout.Parent = scrollFrame
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+-- GUI SECTIONS
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+
+-- Movement Speed Section
+local speedSection = NeonUI:CreateSection(scrollFrame, "🏃‍♂️ Movement Speed", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 120))
+speedSection.section.LayoutOrder = 1
+
+local speedSlider = NeonUI:CreateSlider(
+    speedSection.content, 
+    "Speed", 
+    UDim2.new(0, 0, 0, 0), 
+    UDim2.new(1, 0, 0, 70), 
+    16, 100, 
+    settings.movementSpeed,
+    function(value)
+        settings.movementSpeed = value
+        updateMovementSpeed()
+    end
+)
+
+-- Flight System Section
+local flightSection = NeonUI:CreateSection(scrollFrame, "✈️ Flight System", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 100))
+flightSection.section.LayoutOrder = 2
+
+local flyToggle = NeonUI:CreateToggle(
+    flightSection.content,
+    "Enable Flight Mode",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(1, 0, 0, 50),
+    settings.flyEnabled
+)
+
+-- Auto Collection Section
+local collectSection = NeonUI:CreateSection(scrollFrame, "🌾 Auto Collection", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 100))
+collectSection.section.LayoutOrder = 3
+
+local collectToggle = NeonUI:CreateToggle(
+    collectSection.content,
+    "Auto Collect Plants",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(1, 0, 0, 50),
+    settings.autoCollectPlant
+)
+
+-- Auto Selling Section
+local sellSection = NeonUI:CreateSection(scrollFrame, "💰 Auto Selling", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 100))
+sellSection.section.LayoutOrder = 4
+
+local autoSellToggle = NeonUI:CreateToggle(
+    sellSection.content,
+    "Auto Sell Inventory",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(1, 0, 0, 50),
+    settings.autoSellInventory
+)
+
+-- Quick Actions Section
+local actionsSection = NeonUI:CreateSection(scrollFrame, "⚡ Quick Actions", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 130))
+actionsSection.section.LayoutOrder = 5
+
+local sellButton = NeonUI:CreateButton(
+    actionsSection.content,
+    "💰 Sell Inventory",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(0.48, 0, 0, 45),
+    NeonUI.Theme.success
+)
+
+local buyButton = NeonUI:CreateButton(
+    actionsSection.content,
+    "🛒 Buy Seeds",
+    UDim2.new(0.52, 0, 0, 10),
+    UDim2.new(0.48, 0, 0, 45),
+    NeonUI.Theme.secondary
+)
+
+local collectButton = NeonUI:CreateButton(
+    actionsSection.content,
+    "🌾 Collect All",
+    UDim2.new(0, 0, 0, 65),
+    UDim2.new(1, 0, 0, 45),
+    NeonUI.Theme.accent
+)
+
+-- Auto Buy Section
+local autoBuySection = NeonUI:CreateSection(scrollFrame, "🛒 Auto Buy System", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 160))
+autoBuySection.section.LayoutOrder = 6
+
+local autoBuyToggle = NeonUI:CreateToggle(
+    autoBuySection.content,
+    "Auto Buy Seeds",
+    UDim2.new(0, 0, 0, 10),
+    UDim2.new(1, 0, 0, 50),
+    settings.autoBuySeeds
+)
+
+local buyIntervalSlider = NeonUI:CreateSlider(
+    autoBuySection.content,
+    "Buy Interval (seconds)",
+    UDim2.new(0, 0, 0, 70),
+    UDim2.new(1, 0, 0, 70),
+    1, 30,
+    settings.buyInterval,
+    function(value)
+        settings.buyInterval = value
+    end
+)
+
+-- Seed Selection Section
+local seedSection = NeonUI:CreateSection(scrollFrame, "🌱 Seed Selection", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 200))
+seedSection.section.LayoutOrder = 7
+
+-- Current seed display
+local currentSeedLabel = Instance.new("TextLabel")
+currentSeedLabel.Size = UDim2.new(1, 0, 0, 30)
+currentSeedLabel.Position = UDim2.new(0, 0, 0, 10)
+currentSeedLabel.BackgroundTransparency = 1
+currentSeedLabel.Text = "Current: " .. settings.selectedSeeds[1]
+currentSeedLabel.TextColor3 = NeonUI.Theme.textSecondary
+currentSeedLabel.TextSize = 12
+currentSeedLabel.Font = Enum.Font.Gotham
+currentSeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+currentSeedLabel.Parent = seedSection.content
+
+-- Seed grid
+local seedGrid = Instance.new("ScrollingFrame")
+seedGrid.Size = UDim2.new(1, 0, 0, 150)
+seedGrid.Position = UDim2.new(0, 0, 0, 45)
+seedGrid.BackgroundColor3 = NeonUI.Theme.surface
+seedGrid.BackgroundTransparency = 0.3
+seedGrid.BorderSizePixel = 0
+seedGrid.ScrollBarThickness = 4
+seedGrid.CanvasSize = UDim2.new(0, 0, 0, 0)
+seedGrid.AutomaticCanvasSize = Enum.AutomaticSize.Y
+seedGrid.Parent = seedSection.content
+
+local seedCorner = Instance.new("UICorner")
+seedCorner.CornerRadius = UDim.new(0, 8)
+seedCorner.Parent = seedGrid
+
+local seedLayout = Instance.new("UIGridLayout")
+seedLayout.CellSize = UDim2.new(0, 80, 0, 30)
+seedLayout.CellPadding = UDim2.new(0, 5, 0, 5)
+seedLayout.SortOrder = Enum.SortOrder.Name
+seedLayout.Parent = seedGrid
+
+local seedPadding = Instance.new("UIPadding")
+seedPadding.PaddingAll = UDim.new(0, 5)
+seedPadding.Parent = seedGrid
+
+-- Create seed buttons
+for _, seedName in ipairs(availableSeeds) do
+    local seedButton = Instance.new("TextButton")
+    seedButton.Size = UDim2.new(0, 80, 0, 30)
+    seedButton.BackgroundColor3 = settings.selectedSeeds[1] == seedName and NeonUI.Theme.primary or NeonUI.Theme.surface
+    seedButton.BorderSizePixel = 0
+    seedButton.Text = seedName
+    seedButton.TextColor3 = NeonUI.Theme.textPrimary
+    seedButton.TextSize = 10
+    seedButton.Font = Enum.Font.Gotham
+    seedButton.TextScaled = true
+    seedButton.Parent = seedGrid
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = seedButton
+    
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Color = settings.selectedSeeds[1] == seedName and NeonUI.Theme.primary or NeonUI.Theme.textMuted
+    buttonStroke.Thickness = 1
+    buttonStroke.Transparency = 0.5
+    buttonStroke.Parent = seedButton
+    
+    if settings.selectedSeeds[1] == seedName then
+        NeonUI:CreateGlow(seedButton, NeonUI.Theme.primary)
+    end
+    
+    seedButton.MouseButton1Click:Connect(function()
+        -- Update selection
+        settings.selectedSeeds[1] = seedName
+        currentSeedLabel.Text = "Current: " .. seedName
+        
+        -- Update all seed buttons
+        for _, btn in ipairs(seedGrid:GetChildren()) do
+            if btn:IsA("TextButton") then
+                local isSelected = btn.Text == seedName
+                btn.BackgroundColor3 = isSelected and NeonUI.Theme.primary or NeonUI.Theme.surface
+                btn:FindFirstChild("UIStroke").Color = isSelected and NeonUI.Theme.primary or NeonUI.Theme.textMuted
+                
+                local existingGlow = btn:FindFirstChild("NeonGlow")
+                if existingGlow then existingGlow:Destroy() end
+                
+                if isSelected then
+                    NeonUI:CreateGlow(btn, NeonUI.Theme.primary)
+                end
+            end
+        end
+    end)
+end
+
+-- Status Section
+local statusSection = NeonUI:CreateSection(scrollFrame, "📊 Status", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 120))
+statusSection.section.LayoutOrder = 8
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, -20)
+statusText.Position = UDim2.new(0, 0, 0, 10)
+statusText.BackgroundTransparency = 1
+statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")
+statusText.TextColor3 = NeonUI.Theme.textSecondary
+statusText.TextSize = 12
+statusText.Font = Enum.Font.Gotham
+statusText.TextXAlignment = Enum.TextXAlignment.Left
+statusText.TextYAlignment = Enum.TextYAlignment.Top
+statusText.Parent = statusSection.content
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+-- CORE FUNCTIONS
+-- ═══════════════════════════════════════════════════════════════════════════════════════
+
+local function updateMovementSpeed()
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.WalkSpeed = settings.movementSpeed
+    end
+    statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")
+end
+
+local function buySeed(seedName)
+    local success = pcall(function()
+        buySeedEvent:FireServer(seedName)
+        wait(0.1)
+        buySeedEvent:FireServer(seedName, 1)
+        wait(0.1)
+        buySeedEvent:FireServer("sheckles", seedName, 1)
+    end)
+    return success
+end
+
+local function sellInventoryWithTeleport()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local originalPosition = humanoidRootPart.CFrame
+    
+    sellButton.Text = "💰 Selling..."
+    humanoidRootPart.CFrame = CFrame.new(SELL_POSITION)
+    wait(0.5)
+    sellInventoryEvent:FireServer()
+    wait(1)
+    humanoidRootPart.CFrame = originalPosition
+    sellButton.Text = "💰 Sell Inventory"
+end
+
+local function getAllPlants()
+    local mainFarm = workspace:FindFirstChild("Farm")
+    if not mainFarm then return {} end
+    
+    local plants = {}
+    for _, farmFolder in pairs(mainFarm:GetChildren()) do
+        if farmFolder.Name == "Farm" then
+            local importantFolder = farmFolder:FindFirstChild("Important")
+            if importantFolder then
+                local plantsFolder = importantFolder:FindFirstChild("Plants_Physical")
+                if plantsFolder then
+                    for _, plant in pairs(plantsFolder:GetChildren()) do
+                        local fruitSpawn = plant:FindFirstChild("Fruit_Spawn")
+                        if fruitSpawn then
+                            local spawnPoint = fruitSpawn:FindFirstChild("Spawn_Point")
+                            if spawnPoint then
+                                table.insert(plants, {name = plant.Name, spawnPoint = spawnPoint})
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return plants
+end
+
+local function collectFromPlant(plant)
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local spawnPoint = plant.spawnPoint
+    
+    if spawnPoint and spawnPoint.CFrame then
+        humanoidRootPart.CFrame = spawnPoint.CFrame + Vector3.new(0, 5, 0)
+        wait(0.1)
+        
+        local virtualInputManager = game:GetService("VirtualInputManager")
+        for i = 1, 10 do
+            virtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            wait(0.05)
+            virtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            wait(0.05)
+        end
+        return true
+    end
+    return false
+end
+
+local function autoCollectLoop()
+    local plantIndex = 1
+    statusText.Text = "🔄 Auto collecting...\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")
+    
+    while settings.autoCollectPlant do
+        local plants = getAllPlants()
+        if #plants > 0 then
+            if plantIndex > #plants then plantIndex = 1 end
+            collectFromPlant(plants[plantIndex])
+            plantIndex = plantIndex + 1
+        end
+        wait(1)
+    end
+    
+    statusText.Text = "✅ Ready to farm!\n🏃‍♂️ Speed: " .. settings.movementSpeed .. "\n✈️ Flight: " .. (settings.flyEnabled and "ON" or "OFF")
